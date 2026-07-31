@@ -1,0 +1,12 @@
+.git
+.cursor
+.env
+data/
+**/__pycache__/
+**/.pytest_cache/
+**/.venv/
+**/node_modules/
+frontend/dist/
+backend/tests/
+*.pyc
+.DS_Store

@@ -1,0 +1,28 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: media-manager:latest
+    ports:
+      - "${APP_PORT:-8080}:8000"
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      FRONTEND_DIST: /app/frontend/dist
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    volumes:
+      - mm-data:/data
+    restart: unless-stopped
+    mem_limit: 180m
+    memswap_limit: 180m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  mm-data:

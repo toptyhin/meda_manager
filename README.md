@@ -1,0 +1,131 @@
+# Media Manager
+
+Лёгкий медиа-менеджер с генерацией и редактированием изображений через [Agnes AI](https://www.agnes-ai.com/).
+
+- **Backend:** FastAPI + SQLite + uv (один процесс uvicorn, бюджет ~150 МБ RAM)
+- **Frontend:** React + Vite + Tailwind v4 + yarn
+- **Модели:** `agnes-image-2.1-flash` (генерация/edit), `agnes-2.5-flash` (улучшение промптов)
+
+## Возможности
+
+- Закрытая регистрация по инвайт-коду (первый пользователь — admin)
+- Загрузка референсных изображений
+- Категории и версии промптов
+- Кнопка «Улучшить промпт» (Agnes 2.5 Flash)
+- Генерация и image-to-image редактирование (Agnes Image 2.1 Flash)
+- Медиа-грид: фильтры, сортировка, оценки 0–5
+
+## Быстрый старт
+
+```bash
+cp .env.example .env
+# укажите AGNES_API_KEY и JWT_SECRET
+```
+
+### Backend
+
+```bash
+cd backend
+uv sync
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+При первом запуске в логе появится **bootstrap invite** (или используется `BOOTSTRAP_INVITE` из `.env`).
+
+### Frontend (dev)
+
+```bash
+cd frontend
+yarn
+yarn dev
+```
+
+Откройте http://localhost:5173 — проксирует `/api` на backend.
+
+### Docker Compose (локально / без TLS)
+
+Один контейнер: FastAPI + собранный SPA, SQLite на volume, лимит **180 МБ** RAM.
+
+```bash
+cp .env.example .env
+# AGNES_API_KEY, JWT_SECRET, при желании BOOTSTRAP_INVITE
+# для Docker: CORS_ORIGINS=*
+
+docker compose up -d --build
+```
+
+Приложение: http://localhost:8080 (порт через `APP_PORT`).  
+Данные: volume `mm-data` → `/data` (БД + изображения).  
+Инвайт при старте — в `docker compose logs -f app`.
+
+```bash
+docker compose logs -f app
+docker compose down
+```
+
+Образ: multi-stage (`node:22-alpine` → `python:3.12-slim-bookworm` + uv), без Redis/Postgres.
+
+### Production (Traefik + Let's Encrypt)
+
+Стек: **Traefik v3.7.8** (reverse proxy, HTTP→HTTPS) + приложение. Сертификат выпускается и обновляется автоматически через ACME HTTP-01 (Let's Encrypt).
+
+1. DNS `A`/`AAAA` для `DOMAIN` указывает на сервер; порты **80** и **443** открыты.
+2. В `.env` задайте:
+
+```bash
+DOMAIN=media.example.com
+ACME_EMAIL=admin@example.com
+CORS_ORIGINS=https://media.example.com
+# AGNES_API_KEY, JWT_SECRET, …
+```
+
+3. Запуск:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+Приложение: `https://$DOMAIN`. Сертификаты хранятся в volume `letsencrypt`.  
+Для тестовой выдачи без rate-limit LE задайте в `.env`:
+`ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory` (потом уберите и перевыпустите боевой сертификат).
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+### Production без Docker
+
+```bash
+cd frontend && yarn build
+cd ../backend && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+Статика из `frontend/dist` отдаётся самим FastAPI.
+
+## Тесты
+
+```bash
+cd backend
+uv run pytest
+```
+
+## API (кратко)
+
+| Метод | Путь | Описание |
+|-------|------|----------|
+| POST | `/api/auth/register` | Регистрация + инвайт |
+| POST | `/api/auth/login` | Логин → JWT |
+| GET | `/api/auth/me` | Текущий пользователь |
+| POST | `/api/invites` | Новый инвайт (admin) |
+| CRUD | `/api/categories` | Категории промптов |
+| CRUD | `/api/prompts` + `/versions` | Промпты и версии |
+| POST | `/api/images/upload` | Загрузка референса |
+| GET | `/api/images` | Список с фильтрами |
+| POST | `/api/generations` | Старт генерации → job |
+| GET | `/api/generations/{id}` | Статус job (поллинг) |
+| POST | `/api/assistant/improve` | Улучшение промпта |
+
+## Переменные окружения
+
+См. [`.env.example`](.env.example).
