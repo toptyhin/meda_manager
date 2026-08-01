@@ -11,13 +11,14 @@ from app.db import get_session
 from app.models import (
     Generation,
     GenerationMode,
+    GenerationStep,
     Image,
     Prompt,
     PromptMode,
     PromptVersion,
     User,
 )
-from app.schemas import GenerationCreate, GenerationOut
+from app.schemas import GenerationCreate, GenerationOut, GenerationStepOut
 from app.services.jobs import run_generation
 
 router = APIRouter()
@@ -26,7 +27,39 @@ ALLOWED_SIZES = {"1K", "2K", "3K", "4K"}
 ALLOWED_RATIOS = {"1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"}
 
 
-def _to_out(job: Generation) -> GenerationOut:
+def _step_to_out(step: GenerationStep) -> GenerationStepOut:
+    issues: list[dict] = []
+    if step.review_issues:
+        try:
+            parsed = json.loads(step.review_issues)
+            if isinstance(parsed, list):
+                issues = [i for i in parsed if isinstance(i, dict)]
+        except json.JSONDecodeError:
+            issues = []
+    thumb_url = None
+    file_url = None
+    if step.image_id is not None:
+        thumb_url = f"/api/images/{step.image_id}/thumb"
+        file_url = f"/api/images/{step.image_id}/file"
+    return GenerationStepOut(
+        id=step.id,  # type: ignore[arg-type]
+        attempt=step.attempt,
+        action=step.action,
+        prompt_used=step.prompt_used,
+        image_id=step.image_id,
+        thumb_url=thumb_url,
+        file_url=file_url,
+        review_score=step.review_score,
+        review_passed=step.review_passed,
+        review_issues=issues,
+        review_fix_mode=step.review_fix_mode,
+        error=step.error,
+        created_at=step.created_at,
+        finished_at=step.finished_at,
+    )
+
+
+def _to_out(job: Generation, steps: Optional[list[GenerationStep]] = None) -> GenerationOut:
     try:
         params = json.loads(job.params or "{}")
     except json.JSONDecodeError:
@@ -38,10 +71,23 @@ def _to_out(job: Generation) -> GenerationOut:
         error=job.error,
         prompt_version_id=job.prompt_version_id,
         result_image_id=job.result_image_id,
+        auto_review=bool(job.auto_review),
+        review_score=job.review_score,
+        review_passed=job.review_passed,
         params=params,
+        steps=[_step_to_out(s) for s in (steps or [])],
         created_at=job.created_at,
         finished_at=job.finished_at,
     )
+
+
+async def _load_steps(session: AsyncSession, job_id: int) -> list[GenerationStep]:
+    result = await session.exec(
+        select(GenerationStep)
+        .where(GenerationStep.generation_id == job_id)
+        .order_by(GenerationStep.attempt.asc())
+    )
+    return list(result.all())
 
 
 @router.post("", response_model=GenerationOut, status_code=status.HTTP_201_CREATED)
@@ -96,6 +142,7 @@ async def create_generation(
         "parent_image_id": body.parent_image_id,
         "category_id": body.category_id,
         "mode": body.mode.value,
+        "auto_review": body.auto_review,
     }
 
     job = Generation(
@@ -103,13 +150,14 @@ async def create_generation(
         prompt_version_id=prompt_version_id,
         mode=body.mode,
         params=json.dumps(params, ensure_ascii=False),
+        auto_review=body.auto_review,
     )
     session.add(job)
     await session.commit()
     await session.refresh(job)
 
     asyncio.create_task(run_generation(job.id))  # type: ignore[arg-type]
-    return _to_out(job)
+    return _to_out(job, steps=[])
 
 
 @router.get("", response_model=list[GenerationOut])
@@ -136,4 +184,5 @@ async def get_generation(
     job = await session.get(Generation, job_id)
     if job is None or job.user_id != user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Generation not found")
-    return _to_out(job)
+    steps = await _load_steps(session, job_id)
+    return _to_out(job, steps=steps)

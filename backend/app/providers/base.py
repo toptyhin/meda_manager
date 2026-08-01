@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import Optional
 
 
@@ -9,6 +10,15 @@ class GenerationError(Exception):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+
+
+@dataclass
+class ImageReview:
+    score: int
+    passed: bool
+    issues: list[dict] = field(default_factory=list)
+    fix_mode: str = "i2i"  # "i2i" | "regen"
+    fix_instructions: str = ""
 
 
 class ImageProvider(ABC):
@@ -25,3 +35,7 @@ class ImageProvider(ABC):
     @abstractmethod
     async def improve_prompt(self, text: str, category: Optional[str] = None) -> str:
         """Improve / structure a prompt for image generation."""
+
+    @abstractmethod
+    async def review_image(self, prompt: str, image: bytes) -> ImageReview:
+        """Evaluate a generated image against the original prompt."""

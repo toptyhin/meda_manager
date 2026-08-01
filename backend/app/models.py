@@ -13,6 +13,7 @@ def utcnow() -> datetime:
 class ImageKind(str, Enum):
     reference = "reference"
     generated = "generated"
+    draft = "draft"
 
 
 class PromptSource(str, Enum):
@@ -121,5 +122,26 @@ class Generation(SQLModel, table=True):
     error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     params: str = Field(default="{}", sa_column=Column(Text, nullable=False))
     result_image_id: Optional[int] = Field(default=None, foreign_key="images.id")
+    auto_review: bool = False
+    review_score: Optional[int] = None
+    review_passed: Optional[bool] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    finished_at: Optional[datetime] = None
+
+
+class GenerationStep(SQLModel, table=True):
+    __tablename__ = "generation_steps"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    generation_id: int = Field(foreign_key="generations.id", index=True)
+    attempt: int
+    action: str = Field(max_length=32)  # initial | fix_i2i | fix_regen
+    prompt_used: str = Field(sa_column=Column(Text, nullable=False))
+    image_id: Optional[int] = Field(default=None, foreign_key="images.id")
+    review_score: Optional[int] = None
+    review_passed: Optional[bool] = None
+    review_issues: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    review_fix_mode: Optional[str] = Field(default=None, max_length=16)
+    error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     created_at: datetime = Field(default_factory=utcnow)
     finished_at: Optional[datetime] = None

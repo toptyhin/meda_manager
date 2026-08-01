@@ -102,6 +102,7 @@ export const generationsApi = {
     size?: string
     ratio?: string
     category_id?: number | null
+    auto_review?: boolean
   }) => api<Generation>('/api/generations', { method: 'POST', json: body }),
   get: (id: number) => api<Generation>(`/api/generations/${id}`),
   list: () => api<Generation[]>('/api/generations'),

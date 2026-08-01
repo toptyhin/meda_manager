@@ -5,7 +5,7 @@ import pytest
 import respx
 
 from app.config import get_settings
-from app.providers.agnes import AgnesProvider
+from app.providers.agnes import AgnesProvider, _parse_review_json
 from app.providers.base import GenerationError
 
 TINY_PNG = base64.b64decode(
@@ -81,5 +81,63 @@ async def test_improve_prompt() -> None:
     try:
         text = await provider.improve_prompt("человек в очках с сумкой", category="мода")
         assert "fashion" in text.lower() or "person" in text.lower() or "sunglasses" in text.lower()
+    finally:
+        await provider.aclose()
+
+
+def test_parse_review_json_fenced() -> None:
+    raw = """```json
+{"score": 8, "passed": true, "issues": [], "fix_mode": "i2i", "fix_instructions": ""}
+```"""
+    obj = _parse_review_json(raw)
+    assert obj["score"] == 8
+    assert obj["passed"] is True
+
+
+def test_parse_review_json_with_preamble() -> None:
+    raw = 'Here is my review:\n{"score": 3, "passed": false, "issues": [], "fix_mode": "regen", "fix_instructions": "redo"}'
+    obj = _parse_review_json(raw)
+    assert obj["fix_mode"] == "regen"
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_review_image() -> None:
+    settings = get_settings()
+    route = respx.post(f"{settings.agnes_base_url}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "r",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": (
+                                '{"score": 6, "passed": false, '
+                                '"issues": [{"type": "anatomy", "description": "bad hands", "severity": "major"}], '
+                                '"fix_mode": "i2i", '
+                                '"fix_instructions": "Fix hands, keep pose"}'
+                            ),
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+    )
+    provider = AgnesProvider(settings=settings)
+    try:
+        review = await provider.review_image("a person waving", TINY_PNG)
+        assert review.score == 6
+        assert review.passed is False
+        assert review.fix_mode == "i2i"
+        assert "hands" in review.fix_instructions.lower()
+        assert route.called
+        body = route.calls[0].request.content
+        assert b"agnes-2.5-flash" in body
+        assert b"image_url" in body
+        assert b"data:image/png;base64," in body
     finally:
         await provider.aclose()

@@ -3,7 +3,7 @@ import secrets
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +18,25 @@ from app.services.jobs import reap_stale_jobs
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-FRONTEND_DIST = Path(settings.frontend_dist)
+FRONTEND_DIST = Path(settings.frontend_dist).resolve()
+
+
+def _frontend_file(relative: str) -> Path | None:
+    """Return a file under FRONTEND_DIST, or None if missing / outside the dist root."""
+    if not relative or relative.startswith("/") or ".." in Path(relative).parts:
+        return None
+    candidate = (FRONTEND_DIST / relative).resolve()
+    try:
+        candidate.relative_to(FRONTEND_DIST)
+    except ValueError:
+        return None
+    return candidate if candidate.is_file() else None
+
+
+def _looks_like_static_asset(path: str) -> bool:
+    """Paths with a file extension are probes/assets — never fall back to index.html."""
+    name = Path(path).name
+    return bool(name) and "." in name
 
 
 async def ensure_bootstrap_invite() -> None:
@@ -75,7 +93,11 @@ if FRONTEND_DIST.is_dir():
 
     @app.get("/{full_path:path}")
     async def spa(full_path: str) -> FileResponse:
-        candidate = FRONTEND_DIST / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
+        # Existing built files (favicon.ico, robots.txt, …)
+        file_path = _frontend_file(full_path)
+        if file_path is not None:
+            return FileResponse(file_path)
+        # Scanners hit /.env, /var/.env, etc. — do not mask with SPA 200
+        if _looks_like_static_asset(full_path):
+            raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(FRONTEND_DIST / "index.html")

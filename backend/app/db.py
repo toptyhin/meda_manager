@@ -36,6 +36,16 @@ def _migrate(conn) -> None:
             text("ALTER TABLE prompts ADD COLUMN mode VARCHAR(4) NOT NULL DEFAULT 't2i'")
         )
 
+    generations_cols = {c["name"] for c in inspect(conn).get_columns("generations")}
+    if "auto_review" not in generations_cols:
+        conn.execute(
+            text("ALTER TABLE generations ADD COLUMN auto_review BOOLEAN NOT NULL DEFAULT 0")
+        )
+    if "review_score" not in generations_cols:
+        conn.execute(text("ALTER TABLE generations ADD COLUMN review_score INTEGER"))
+    if "review_passed" not in generations_cols:
+        conn.execute(text("ALTER TABLE generations ADD COLUMN review_passed BOOLEAN"))
+
 
 async def init_db() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)

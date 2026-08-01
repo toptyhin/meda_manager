@@ -145,6 +145,24 @@ class GenerationCreate(BaseModel):
     size: str = "1K"
     ratio: str = "1:1"
     category_id: Optional[int] = None
+    auto_review: bool = False
+
+
+class GenerationStepOut(BaseModel):
+    id: int
+    attempt: int
+    action: str
+    prompt_used: str
+    image_id: Optional[int]
+    thumb_url: Optional[str] = None
+    file_url: Optional[str] = None
+    review_score: Optional[int]
+    review_passed: Optional[bool]
+    review_issues: list[dict] = Field(default_factory=list)
+    review_fix_mode: Optional[str]
+    error: Optional[str]
+    created_at: datetime
+    finished_at: Optional[datetime]
 
 
 class GenerationOut(BaseModel):
@@ -154,7 +172,11 @@ class GenerationOut(BaseModel):
     error: Optional[str]
     prompt_version_id: Optional[int]
     result_image_id: Optional[int]
+    auto_review: bool = False
+    review_score: Optional[int] = None
+    review_passed: Optional[bool] = None
     params: dict
+    steps: list[GenerationStepOut] = Field(default_factory=list)
     created_at: datetime
     finished_at: Optional[datetime]
 

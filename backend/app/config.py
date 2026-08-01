@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     bootstrap_invite: str = ""
     cors_origins: str = "http://localhost:5173"
     max_upload_mb: int = 10
+    auto_review_max_fixes: int = 2
+    auto_review_pass_score: int = 7
 
 
     @property

@@ -42,7 +42,7 @@ export type Prompt = {
   current_version: PromptVersion | null
 }
 
-export type ImageKind = 'reference' | 'generated'
+export type ImageKind = 'reference' | 'generated' | 'draft'
 
 export type MediaImage = {
   id: number
@@ -70,6 +70,29 @@ export type ImageListResponse = {
 export type GenerationStatus = 'pending' | 'running' | 'done' | 'error'
 export type GenerationMode = 'generate' | 'edit'
 
+export type ReviewIssue = {
+  type: string
+  description: string
+  severity: string
+}
+
+export type GenerationStep = {
+  id: number
+  attempt: number
+  action: string
+  prompt_used: string
+  image_id: number | null
+  thumb_url: string | null
+  file_url: string | null
+  review_score: number | null
+  review_passed: boolean | null
+  review_issues: ReviewIssue[]
+  review_fix_mode: string | null
+  error: string | null
+  created_at: string
+  finished_at: string | null
+}
+
 export type Generation = {
   id: number
   mode: GenerationMode
@@ -77,7 +100,11 @@ export type Generation = {
   error: string | null
   prompt_version_id: number | null
   result_image_id: number | null
+  auto_review: boolean
+  review_score: number | null
+  review_passed: boolean | null
   params: Record<string, unknown>
+  steps: GenerationStep[]
   created_at: string
   finished_at: string | null
 }

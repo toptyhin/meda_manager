@@ -90,6 +90,8 @@ async def list_images(
     filters = [Image.user_id == user.id]
     if kind is not None:
         filters.append(Image.kind == kind)
+    else:
+        filters.append(Image.kind != ImageKind.draft)
     if category_id is not None:
         filters.append(Image.category_id == category_id)
     if rating_min is not None:
