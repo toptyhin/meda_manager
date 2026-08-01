@@ -25,6 +25,7 @@ def _to_out(img: Image) -> ImageOut:
         height=img.height,
         rating=img.rating,
         prompt_version_id=img.prompt_version_id,
+        prompt_text=img.prompt_text,
         parent_image_id=img.parent_image_id,
         category_id=img.category_id,
         size=img.size,

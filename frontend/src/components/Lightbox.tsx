@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AuthedImage } from './AuthedImage'
+import { Modal } from './Modal'
 import { Stars } from './Stars'
 import type { MediaImage } from '../types'
 
@@ -12,19 +14,23 @@ type Props = {
 
 export function Lightbox({ image, onClose, onRate, onDelete }: Props) {
   const navigate = useNavigate()
+  const [copied, setCopied] = useState(false)
+
+  async function copyPrompt() {
+    if (!image.prompt_text) return
+    try {
+      await navigator.clipboard.writeText(image.prompt_text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* ignore */
+    }
+  }
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-ink/70 flex items-center justify-center p-2 sm:p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal
-    >
-      <div
-        className="bg-card rounded-2xl max-w-5xl w-full max-h-[90vh] overflow-auto border border-line shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex flex-col md:flex-row">
+    <Modal onClose={onClose} label={`Изображение #${image.id}`} className="max-w-5xl">
+      {(close) => (
+      <div className="flex flex-col md:flex-row">
           <div className="flex-1 bg-ink/5 min-h-[280px] flex items-center justify-center p-4">
             <AuthedImage
               src={image.file_url}
@@ -44,7 +50,7 @@ export function Lightbox({ image, onClose, onRate, onDelete }: Props) {
               </div>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={close}
                 className="text-muted hover:text-ink text-xl leading-none"
                 aria-label="Закрыть"
               >
@@ -60,6 +66,23 @@ export function Lightbox({ image, onClose, onRate, onDelete }: Props) {
               <br />
               {image.width}×{image.height}
             </div>
+            {image.prompt_text && (
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="text-xs text-muted">Промпт</div>
+                  <button
+                    type="button"
+                    onClick={() => void copyPrompt()}
+                    className="text-[11px] text-accent hover:underline"
+                  >
+                    {copied ? 'Скопировано' : 'Копировать'}
+                  </button>
+                </div>
+                <div className="max-h-40 overflow-auto whitespace-pre-wrap text-xs rounded-lg border border-line bg-paper/60 p-2 leading-relaxed">
+                  {image.prompt_text}
+                </div>
+              </div>
+            )}
             <div className="flex flex-col gap-2 pt-2">
               <button
                 type="button"
@@ -80,7 +103,7 @@ export function Lightbox({ image, onClose, onRate, onDelete }: Props) {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </Modal>
   )
 }

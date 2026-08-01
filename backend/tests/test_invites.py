@@ -63,9 +63,13 @@ async def test_invites_crud_and_block(auth_client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_invites_requires_admin(client: AsyncClient) -> None:
+async def test_invites_requires_auth(client: AsyncClient) -> None:
     assert (await client.get("/api/invites")).status_code == 401
+    assert (await client.post("/api/invites")).status_code == 401
 
+
+@pytest.mark.asyncio
+async def test_invites_available_to_non_admin(client: AsyncClient) -> None:
     admin_reg = await client.post(
         "/api/auth/register",
         json={"username": "alice", "password": "secret12", "invite_code": "test-invite-code"},
@@ -84,16 +88,16 @@ async def test_invites_requires_admin(client: AsyncClient) -> None:
     assert bob_reg.status_code == 200
     bob_headers = {"Authorization": f"Bearer {bob_reg.json()['access_token']}"}
 
-    assert (await client.get("/api/invites", headers=bob_headers)).status_code == 403
-    assert (await client.post("/api/invites", headers=bob_headers)).status_code == 403
+    assert (await client.get("/api/invites", headers=bob_headers)).status_code == 200
+    assert (await client.post("/api/invites", headers=bob_headers)).status_code == 200
     assert (
         await client.patch(
             f"/api/invites/{inv['id']}", headers=bob_headers, json={"is_blocked": True}
         )
-    ).status_code == 403
+    ).status_code == 200
     assert (
         await client.delete(f"/api/invites/{inv['id']}", headers=bob_headers)
-    ).status_code == 403
+    ).status_code == 204
 
 
 @pytest.mark.asyncio

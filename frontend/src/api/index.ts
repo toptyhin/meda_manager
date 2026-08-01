@@ -5,12 +5,17 @@ import type {
   GenerationMode,
   ImageKind,
   ImageListResponse,
+  ImproveKind,
+  ImproveTemplate,
+  ImproveTemplateVersion,
   Invite,
   MediaImage,
   MediaVideo,
   Prompt,
   PromptMode,
   PromptVersion,
+  StyleKind,
+  StylePreset,
   User,
   VideoGeneration,
   VideoListResponse,
@@ -46,6 +51,31 @@ export const categoriesApi = {
   update: (id: number, name: string) =>
     api<Category>(`/api/categories/${id}`, { method: 'PATCH', json: { name } }),
   remove: (id: number) => api<void>(`/api/categories/${id}`, { method: 'DELETE' }),
+}
+
+export const stylesApi = {
+  list: (kind?: StyleKind) => {
+    const q = kind != null ? `?kind=${kind}` : ''
+    return api<StylePreset[]>(`/api/styles${q}`)
+  },
+  create: (body: {
+    title: string
+    description?: string | null
+    category: string
+    kind?: StyleKind
+    text: string
+  }) => api<StylePreset>('/api/styles', { method: 'POST', json: body }),
+  update: (
+    id: number,
+    body: {
+      title?: string
+      description?: string | null
+      category?: string
+      kind?: StyleKind
+      text?: string
+    },
+  ) => api<StylePreset>(`/api/styles/${id}`, { method: 'PATCH', json: body }),
+  remove: (id: number) => api<void>(`/api/styles/${id}`, { method: 'DELETE' }),
 }
 
 export const promptsApi = {
@@ -122,6 +152,13 @@ export const assistantApi = {
     api<{ improved_text: string }>('/api/assistant/video-improve', {
       method: 'POST',
       json: { text, category_name },
+    }),
+  getTemplate: (kind: ImproveKind) =>
+    api<ImproveTemplate>(`/api/assistant/templates/${kind}`),
+  addTemplateVersion: (kind: ImproveKind, text: string) =>
+    api<ImproveTemplateVersion>(`/api/assistant/templates/${kind}/versions`, {
+      method: 'POST',
+      json: { text },
     }),
 }
 

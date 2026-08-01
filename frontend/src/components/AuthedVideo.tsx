@@ -14,7 +14,8 @@ export function AuthedVideo({ src, className, controls = true }: Props) {
     let objectUrl: string | null = null
     let cancelled = false
     void fetchAuthedBlob(src)
-      .then((u) => {
+      .then((blob) => {
+        const u = URL.createObjectURL(blob)
         if (cancelled) {
           URL.revokeObjectURL(u)
           return
@@ -40,6 +41,7 @@ export function AuthedVideo({ src, className, controls = true }: Props) {
       controls={controls}
       preload="metadata"
       playsInline
+      tabIndex={-1}
       className={className}
     />
   )

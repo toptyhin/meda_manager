@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth } from '../auth/useAuth'
 import { ApiError } from '../api/client'
 import { ThemeToggle } from '../components/ThemeToggle'
 
@@ -35,8 +35,11 @@ export function LoginPage() {
         onSubmit={(e) => void onSubmit(e)}
         className="w-full max-w-md bg-card border border-line rounded-2xl p-8 shadow-sm"
       >
-        <h1 className="text-2xl font-semibold mb-1">Вход</h1>
-        <p className="text-muted text-sm mb-6">Media Manager</p>
+        <div className="flex flex-col items-center mb-6">
+          <img src="/logo.png" alt="Media Manager" className="size-16 rounded-2xl mb-3" width={64} height={64} />
+          <h1 className="text-2xl font-semibold">Вход</h1>
+          <p className="text-muted text-sm mt-1">Media Manager</p>
+        </div>
         {error && (
           <div className="mb-4 rounded-md bg-bad/10 text-bad text-sm px-3 py-2">{error}</div>
         )}

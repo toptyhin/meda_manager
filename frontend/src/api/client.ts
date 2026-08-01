@@ -54,20 +54,11 @@ export async function api<T>(
   return res.json() as Promise<T>
 }
 
-export function authImageUrl(url: string): string {
-  const token = getToken()
-  if (!token) return url
-  const sep = url.includes('?') ? '&' : '?'
-  // Images are fetched with Authorization header via blob helper below.
-  return url + sep + '_auth=1'
-}
-
-export async function fetchAuthedBlob(url: string): Promise<string> {
+export async function fetchAuthedBlob(url: string): Promise<Blob> {
   const token = getToken()
   const res = await fetch(url, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
   if (!res.ok) throw await parseError(res)
-  const blob = await res.blob()
-  return URL.createObjectURL(blob)
+  return res.blob()
 }

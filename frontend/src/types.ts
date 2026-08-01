@@ -51,6 +51,7 @@ export type MediaImage = {
   height: number
   rating: number
   prompt_version_id: number | null
+  prompt_text?: string | null
   parent_image_id: number | null
   category_id: number | null
   size: string | null
@@ -58,6 +59,25 @@ export type MediaImage = {
   created_at: string
   thumb_url: string
   file_url: string
+}
+
+export type ImproveKind = 'image' | 'video'
+
+export type ImproveTemplateVersion = {
+  id: number
+  kind: ImproveKind
+  version: number
+  text: string
+  created_at: string
+}
+
+export type ImproveTemplate = {
+  kind: ImproveKind
+  text: string
+  version: number | null
+  is_default: boolean
+  default_text: string
+  versions: ImproveTemplateVersion[]
 }
 
 export type ImageListResponse = {
@@ -107,6 +127,18 @@ export type Generation = {
   steps: GenerationStep[]
   created_at: string
   finished_at: string | null
+}
+
+export type StyleKind = 'image' | 'video' | 'both'
+
+export type StylePreset = {
+  id: number
+  title: string
+  description: string | null
+  category: string
+  kind: StyleKind
+  text: string
+  created_at: string
 }
 
 export type VideoMode = 't2v' | 'i2v' | 'keyframes'

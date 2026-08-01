@@ -46,6 +46,23 @@ def _migrate(conn) -> None:
     if "review_passed" not in generations_cols:
         conn.execute(text("ALTER TABLE generations ADD COLUMN review_passed BOOLEAN"))
 
+    images_cols = {c["name"] for c in inspect(conn).get_columns("images")}
+    if "prompt_text" not in images_cols:
+        conn.execute(text("ALTER TABLE images ADD COLUMN prompt_text TEXT"))
+        conn.execute(
+            text(
+                """
+                UPDATE images
+                SET prompt_text = (
+                    SELECT json_extract(g.params, '$.text')
+                    FROM generations g
+                    WHERE g.result_image_id = images.id
+                )
+                WHERE images.kind = 'generated' AND images.prompt_text IS NULL
+                """
+            )
+        )
+
 
 async def init_db() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)

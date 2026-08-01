@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { useAuth } from './auth/AuthContext'
+import { useAuth } from './auth/useAuth'
 import { Layout } from './components/Layout'
 import { GeneratePage } from './pages/GeneratePage'
 import { InvitesPage } from './pages/InvitesPage'
@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage'
 import { MediaPage } from './pages/MediaPage'
 import { PromptsPage } from './pages/PromptsPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { StylesPage } from './pages/StylesPage'
 import { VideoPage } from './pages/VideoPage'
 import type { ReactNode } from 'react'
 
@@ -20,12 +21,6 @@ function Protected({ children }: { children: ReactNode }) {
     )
   }
   if (!user) return <Navigate to="/login" replace />
-  return children
-}
-
-function AdminOnly({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
-  if (!user?.is_admin) return <Navigate to="/" replace />
   return children
 }
 
@@ -43,16 +38,10 @@ export default function App() {
       >
         <Route index element={<MediaPage />} />
         <Route path="prompts" element={<PromptsPage />} />
+        <Route path="styles" element={<StylesPage />} />
         <Route path="generate" element={<GeneratePage />} />
         <Route path="video" element={<VideoPage />} />
-        <Route
-          path="invites"
-          element={
-            <AdminOnly>
-              <InvitesPage />
-            </AdminOnly>
-          }
-        />
+        <Route path="invites" element={<InvitesPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -44,6 +44,17 @@ class VideoMode(str, Enum):
     keyframes = "keyframes"
 
 
+class ImproveKind(str, Enum):
+    image = "image"
+    video = "video"
+
+
+class StyleKind(str, Enum):
+    image = "image"
+    video = "video"
+    both = "both"
+
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
 
@@ -110,6 +121,7 @@ class Image(SQLModel, table=True):
     height: int = 0
     rating: int = Field(default=0, ge=0, le=5)
     prompt_version_id: Optional[int] = Field(default=None, foreign_key="prompt_versions.id")
+    prompt_text: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     parent_image_id: Optional[int] = Field(default=None, foreign_key="images.id")
     category_id: Optional[int] = Field(default=None, foreign_key="categories.id")
     size: Optional[str] = Field(default=None, max_length=16)
@@ -187,3 +199,31 @@ class VideoGeneration(SQLModel, table=True):
     result_video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     created_at: datetime = Field(default_factory=utcnow)
     finished_at: Optional[datetime] = None
+
+
+class ImprovePromptVersion(SQLModel, table=True):
+    __tablename__ = "improve_prompt_versions"
+    __table_args__ = (
+        UniqueConstraint("user_id", "kind", "version", name="uq_improve_prompt_version"),
+    )
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    kind: ImproveKind
+    version: int
+    text: str = Field(sa_column=Column(Text, nullable=False))
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class StylePreset(SQLModel, table=True):
+    __tablename__ = "style_presets"
+    __table_args__ = (UniqueConstraint("user_id", "title", name="uq_style_preset_user_title"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    title: str = Field(max_length=256)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    category: str = Field(max_length=128)
+    kind: StyleKind = StyleKind.both
+    text: str = Field(sa_column=Column(Text, nullable=False))
+    created_at: datetime = Field(default_factory=utcnow)

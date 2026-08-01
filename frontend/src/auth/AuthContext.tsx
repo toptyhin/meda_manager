@@ -1,26 +1,8 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { authApi } from '../api'
 import { getToken, setToken } from '../api/client'
 import type { User } from '../types'
-
-type AuthState = {
-  user: User | null
-  loading: boolean
-  login: (username: string, password: string) => Promise<void>
-  register: (username: string, password: string, invite: string) => Promise<void>
-  logout: () => void
-  refresh: () => Promise<void>
-}
-
-const AuthContext = createContext<AuthState | null>(null)
+import { AuthContext } from './useAuth'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -72,10 +54,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth outside AuthProvider')
-  return ctx
 }

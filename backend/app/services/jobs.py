@@ -94,6 +94,7 @@ async def _save_attempt_image(
     settings: Settings,
     kind: ImageKind,
     prompt_version_id: Optional[int],
+    prompt_text: Optional[str],
     parent_image_id: Optional[int],
     category_id: Optional[int],
     size: str,
@@ -108,6 +109,7 @@ async def _save_attempt_image(
         width=saved.width,
         height=saved.height,
         prompt_version_id=prompt_version_id,
+        prompt_text=prompt_text,
         parent_image_id=parent_image_id,
         category_id=category_id,
         size=size,
@@ -139,9 +141,12 @@ async def _finish_job(
     image: Image,
     review: Optional[ImageReview],
     review_error: Optional[str] = None,
+    prompt_text: Optional[str] = None,
 ) -> None:
     image.kind = ImageKind.generated
     image.prompt_version_id = job.prompt_version_id
+    if prompt_text is not None:
+        image.prompt_text = prompt_text
     session.add(image)
 
     job.status = GenerationStatus.done
@@ -207,6 +212,7 @@ async def run_generation(job_id: int) -> None:
                     settings=settings,
                     kind=ImageKind.generated,
                     prompt_version_id=job.prompt_version_id,
+                    prompt_text=prompt_text or None,
                     parent_image_id=parent_id,
                     category_id=category_id,
                     size=size,
@@ -263,6 +269,7 @@ async def run_generation(job_id: int) -> None:
                             job,
                             image=best_image,
                             review=best_review,
+                            prompt_text=best_image.prompt_text or prompt_text or None,
                         )
                         return
                     job.status = GenerationStatus.error
@@ -279,6 +286,7 @@ async def run_generation(job_id: int) -> None:
                     settings=settings,
                     kind=ImageKind.draft,
                     prompt_version_id=job.prompt_version_id,
+                    prompt_text=current_prompt or None,
                     parent_image_id=parent_id,
                     category_id=category_id,
                     size=size,
@@ -311,6 +319,7 @@ async def run_generation(job_id: int) -> None:
                         image=image,
                         review=None,
                         review_error=exc.message,
+                        prompt_text=image.prompt_text or prompt_text or None,
                     )
                     return
 
@@ -328,7 +337,13 @@ async def run_generation(job_id: int) -> None:
                     best_review = review
 
                 if _passed(review, pass_score):
-                    await _finish_job(session, job, image=image, review=review)
+                    await _finish_job(
+                        session,
+                        job,
+                        image=image,
+                        review=review,
+                        prompt_text=image.prompt_text or prompt_text or None,
+                    )
                     return
 
                 if attempt >= max_attempts:
@@ -374,7 +389,13 @@ async def run_generation(job_id: int) -> None:
                     fix_mode=best_review.fix_mode,
                     fix_instructions=best_review.fix_instructions,
                 )
-            await _finish_job(session, job, image=best_image, review=best_review)
+            await _finish_job(
+                session,
+                job,
+                image=best_image,
+                review=best_review,
+                prompt_text=best_image.prompt_text or prompt_text or None,
+            )
 
     except Exception:
         logger.exception("Generation job %s failed", job_id)

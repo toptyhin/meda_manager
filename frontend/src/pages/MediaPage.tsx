@@ -78,9 +78,11 @@ export function MediaPage() {
     if (!files?.length) return
     setUploading(true)
     try {
-      for (const file of Array.from(files)) {
-        await imagesApi.upload(file, categoryId === '' ? undefined : categoryId)
-      }
+      await Promise.all(
+        Array.from(files).map((file) =>
+          imagesApi.upload(file, categoryId === '' ? undefined : categoryId),
+        ),
+      )
       void qc.invalidateQueries({ queryKey: ['images'] })
     } finally {
       setUploading(false)

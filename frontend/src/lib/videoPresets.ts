@@ -125,13 +125,7 @@ export function composePrompt(parts: PromptParts): string {
     .join(', ')
 }
 
-export function appendPhrase(text: string, phrase: string): string {
-  const t = text.trim()
-  const p = phrase.trim()
-  if (!p) return t
-  if (t.toLowerCase().includes(p.toLowerCase())) return t
-  return t ? `${t}, ${p}` : p
-}
+export { insertSnippet as appendPhrase } from './styleSnippets'
 
 export const MODE_LABELS: Record<'t2v' | 'i2v' | 'keyframes', string> = {
   t2v: 'Режиссёр',

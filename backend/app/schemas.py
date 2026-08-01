@@ -3,7 +3,16 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import GenerationMode, GenerationStatus, ImageKind, PromptMode, PromptSource, VideoMode
+from app.models import (
+    GenerationMode,
+    GenerationStatus,
+    ImageKind,
+    ImproveKind,
+    PromptMode,
+    PromptSource,
+    StyleKind,
+    VideoMode,
+)
 
 
 # --- Auth ---
@@ -66,6 +75,35 @@ class CategoryOut(BaseModel):
     created_at: datetime
 
 
+# --- Style presets ---
+class StylePresetCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=256)
+    description: Optional[str] = None
+    category: str = Field(min_length=1, max_length=128)
+    kind: StyleKind = StyleKind.both
+    text: str = Field(min_length=1)
+
+
+class StylePresetUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=256)
+    description: Optional[str] = None
+    category: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    kind: Optional[StyleKind] = None
+    text: Optional[str] = Field(default=None, min_length=1)
+
+
+class StylePresetOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    description: Optional[str]
+    category: str
+    kind: StyleKind
+    text: str
+    created_at: datetime
+
+
 # --- Prompts ---
 class PromptCreate(BaseModel):
     title: str = Field(min_length=1, max_length=256)
@@ -114,6 +152,7 @@ class ImageOut(BaseModel):
     height: int
     rating: int
     prompt_version_id: Optional[int]
+    prompt_text: Optional[str] = None
     parent_image_id: Optional[int]
     category_id: Optional[int]
     size: Optional[str]
@@ -244,3 +283,26 @@ class ImproveRequest(BaseModel):
 
 class ImproveResponse(BaseModel):
     improved_text: str
+
+
+class ImproveTemplateVersionCreate(BaseModel):
+    text: str = Field(min_length=1)
+
+
+class ImproveTemplateVersionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: ImproveKind
+    version: int
+    text: str
+    created_at: datetime
+
+
+class ImproveTemplateOut(BaseModel):
+    kind: ImproveKind
+    text: str
+    version: Optional[int] = None
+    is_default: bool
+    default_text: str
+    versions: list[ImproveTemplateVersionOut] = Field(default_factory=list)

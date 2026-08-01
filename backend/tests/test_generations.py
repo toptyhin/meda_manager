@@ -131,3 +131,35 @@ async def test_t2i_prompt_without_reference_accepted(auth_client: AsyncClient) -
     )
     assert resp.status_code == 201, resp.text
     await asyncio.sleep(0.5)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_generation_saves_prompt_text_on_image(auth_client: AsyncClient) -> None:
+    _mock_agnes()
+    prompt_text = "a red fox in snow, cinematic lighting"
+
+    resp = await auth_client.post(
+        "/api/generations",
+        json={"text": prompt_text, "size": "1K", "ratio": "1:1"},
+    )
+    assert resp.status_code == 201, resp.text
+    job_id = resp.json()["id"]
+
+    for _ in range(30):
+        job = await auth_client.get(f"/api/generations/{job_id}")
+        assert job.status_code == 200
+        body = job.json()
+        if body["status"] in ("done", "error"):
+            break
+        await asyncio.sleep(0.1)
+    else:
+        pytest.fail("generation did not finish")
+
+    assert body["status"] == "done", body
+    image_id = body["result_image_id"]
+    assert image_id is not None
+
+    img = await auth_client.get(f"/api/images/{image_id}")
+    assert img.status_code == 200
+    assert img.json()["prompt_text"] == prompt_text

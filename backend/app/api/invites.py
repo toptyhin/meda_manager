@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.auth import get_admin_user
+from app.auth import get_current_user
 from app.db import get_session
 from app.models import Invite, User
 from app.schemas import InviteOut, InviteUpdate
@@ -28,7 +28,7 @@ def _to_out(invite: Invite, usernames: dict[int, str]) -> InviteOut:
 
 @router.get("", response_model=list[InviteOut])
 async def list_invites(
-    admin: Annotated[User, Depends(get_admin_user)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[InviteOut]:
     result = await session.exec(select(Invite).order_by(Invite.created_at.desc()))
@@ -47,21 +47,21 @@ async def list_invites(
 
 @router.post("", response_model=InviteOut)
 async def create_invite(
-    admin: Annotated[User, Depends(get_admin_user)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> InviteOut:
-    invite = Invite(code=secrets.token_urlsafe(12), created_by=admin.id)
+    invite = Invite(code=secrets.token_urlsafe(12), created_by=user.id)
     session.add(invite)
     await session.commit()
     await session.refresh(invite)
-    return _to_out(invite, {admin.id: admin.username} if admin.id is not None else {})
+    return _to_out(invite, {user.id: user.username} if user.id is not None else {})
 
 
 @router.patch("/{invite_id}", response_model=InviteOut)
 async def update_invite(
     invite_id: int,
     body: InviteUpdate,
-    admin: Annotated[User, Depends(get_admin_user)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> Invite:
     invite = await session.get(Invite, invite_id)
@@ -77,7 +77,7 @@ async def update_invite(
 @router.delete("/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_invite(
     invite_id: int,
-    admin: Annotated[User, Depends(get_admin_user)],
+    user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> None:
     invite = await session.get(Invite, invite_id)

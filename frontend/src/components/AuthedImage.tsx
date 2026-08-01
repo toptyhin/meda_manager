@@ -14,7 +14,8 @@ export function AuthedImage({ src, alt, className }: Props) {
     let objectUrl: string | null = null
     let cancelled = false
     void fetchAuthedBlob(src)
-      .then((u) => {
+      .then((blob) => {
+        const u = URL.createObjectURL(blob)
         if (cancelled) {
           URL.revokeObjectURL(u)
           return

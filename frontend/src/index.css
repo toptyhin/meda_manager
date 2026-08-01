@@ -11,6 +11,7 @@
   --color-muted: var(--muted);
   --color-ok: var(--ok);
   --color-bad: var(--bad);
+  --color-backdrop: var(--backdrop);
 }
 
 :root {
@@ -23,6 +24,7 @@
   --muted: #6b655c;
   --ok: #2f6f4e;
   --bad: #a33b2b;
+  --backdrop: #0f1419;
   color-scheme: light;
 }
 
@@ -36,6 +38,7 @@
   --muted: #9a9388;
   --ok: #4a9a6e;
   --bad: #d46a58;
+  --backdrop: #04060a;
   color-scheme: dark;
 }
 

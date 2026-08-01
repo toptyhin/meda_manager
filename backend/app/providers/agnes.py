@@ -313,6 +313,7 @@ class AgnesProvider(ImageProvider, VideoProvider):
         text: str,
         category: Optional[str] = None,
         kind: str = "image",
+        system: Optional[str] = None,
     ) -> str:
         if not self.settings.agnes_api_key:
             raise GenerationError("AGNES_API_KEY is not configured")
@@ -322,7 +323,8 @@ class AgnesProvider(ImageProvider, VideoProvider):
         if category:
             user_content = f"Category: {category}\n\nPrompt draft:\n{text}"
 
-        system = VIDEO_IMPROVE_SYSTEM if kind == "video" else IMPROVE_SYSTEM
+        if not system:
+            system = VIDEO_IMPROVE_SYSTEM if kind == "video" else IMPROVE_SYSTEM
         payload = {
             "model": CHAT_MODEL,
             "messages": [
