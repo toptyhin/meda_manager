@@ -129,7 +129,10 @@ async def test_review_image() -> None:
     )
     provider = AgnesProvider(settings=settings)
     try:
-        review = await provider.review_image("a person waving", TINY_PNG)
+        review = await provider.review_image(
+            "a person waving",
+            "https://example.com/api/media-ingress/1?exp=1&sig=abc",
+        )
         assert review.score == 6
         assert review.passed is False
         assert review.fix_mode == "i2i"
@@ -138,6 +141,17 @@ async def test_review_image() -> None:
         body = route.calls[0].request.content
         assert b"agnes-2.5-flash" in body
         assert b"image_url" in body
-        assert b"data:image/png;base64," in body
+        assert b"https://example.com/api/media-ingress/1" in body
+        assert b"data:image/" not in body
+    finally:
+        await provider.aclose()
+
+
+@pytest.mark.asyncio
+async def test_review_image_rejects_data_uri() -> None:
+    provider = AgnesProvider(settings=get_settings())
+    try:
+        with pytest.raises(GenerationError, match="publicly fetchable"):
+            await provider.review_image("prompt", "data:image/png;base64,abc")
     finally:
         await provider.aclose()

@@ -21,6 +21,22 @@ class ImageReview:
     fix_instructions: str = ""
 
 
+@dataclass
+class VideoTaskRef:
+    task_id: str
+    video_id: str
+
+
+@dataclass
+class VideoTaskResult:
+    status: str  # queued | in_progress | completed | failed
+    progress: int = 0
+    url: Optional[str] = None
+    seconds: Optional[float] = None
+    size: Optional[str] = None  # e.g. "1280x768"
+    error: Optional[str] = None
+
+
 class ImageProvider(ABC):
     @abstractmethod
     async def generate(
@@ -33,9 +49,44 @@ class ImageProvider(ABC):
         """Generate or edit an image. Returns raw image bytes."""
 
     @abstractmethod
-    async def improve_prompt(self, text: str, category: Optional[str] = None) -> str:
-        """Improve / structure a prompt for image generation."""
+    async def improve_prompt(
+        self,
+        text: str,
+        category: Optional[str] = None,
+        kind: str = "image",
+    ) -> str:
+        """Improve / structure a prompt for image or video generation."""
 
     @abstractmethod
-    async def review_image(self, prompt: str, image: bytes) -> ImageReview:
-        """Evaluate a generated image against the original prompt."""
+    async def review_image(self, prompt: str, image_url: str) -> ImageReview:
+        """Evaluate a generated image against the original prompt.
+
+        ``image_url`` must be a publicly fetchable HTTP(S) URL — Agnes vision
+        does not accept data URIs.
+        """
+
+
+class VideoProvider(ABC):
+    @abstractmethod
+    async def create_video_task(
+        self,
+        prompt: str,
+        *,
+        mode: str = "t2v",
+        image_urls: Optional[list[str]] = None,
+        width: int = 1152,
+        height: int = 768,
+        num_frames: int = 121,
+        frame_rate: float = 24,
+        seed: Optional[int] = None,
+        negative_prompt: Optional[str] = None,
+    ) -> VideoTaskRef:
+        """Create an async video generation task."""
+
+    @abstractmethod
+    async def get_video_result(self, video_id: str) -> VideoTaskResult:
+        """Poll video task status / result by video_id."""
+
+    @abstractmethod
+    async def download_video(self, url: str) -> bytes:
+        """Download generated video bytes from a result URL."""

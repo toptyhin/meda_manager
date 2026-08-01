@@ -3,11 +3,19 @@ import json
 import logging
 import re
 from typing import Optional
+from urllib.parse import urljoin, urlparse
 
 import httpx
 
 from app.config import Settings, get_settings
-from app.providers.base import GenerationError, ImageProvider, ImageReview
+from app.providers.base import (
+    GenerationError,
+    ImageProvider,
+    ImageReview,
+    VideoProvider,
+    VideoTaskRef,
+    VideoTaskResult,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +46,29 @@ Rules:
 - The model excels at complex, detail-rich visuals: describe the visual hierarchy — main subject, background environment, important secondary details, style and lighting, composition constraints.
 - For edit requests, clearly state what to change and what to preserve.
 - Keep it a single concise paragraph, rich in concrete visual detail.
+"""
+
+VIDEO_IMPROVE_SYSTEM = """You are an expert prompt engineer for the Agnes Video V2.0 video generation model.
+Rewrite the user's draft into a clear, detail-rich English video-generation prompt.
+
+Use this structure:
+[Subject] + [Action] + [Scene] + [Camera Movement] + [Lighting] + [Style]
+Example: "A young astronaut walking across a red desert planet, dust blowing in the wind, slow cinematic tracking shot, dramatic sunset lighting, realistic sci-fi style"
+
+For image-to-video (animating a still photo):
+Describe what should move and which key subject elements should remain stable.
+Example: "Animate the character with subtle breathing motion, hair moving gently in the wind, background lights flickering softly, while keeping the face and outfit consistent"
+
+For keyframe transitions:
+Clearly describe the transition relationship between keyframes.
+Example: "Create a smooth transition from the first keyframe to the second keyframe, maintaining character identity, consistent camera angle, and natural motion between scenes"
+
+Rules:
+- Output ONLY the improved prompt text: no quotes, no explanations, no markdown.
+- Translate to English if the input is not English.
+- Preserve the user's intent, subject, camera style, and any motion cues.
+- Prefer concrete, cinematic language: subject actions, camera movement, lighting, style.
+- Keep it a single concise paragraph, rich in concrete visual and motion detail.
 """
 
 REVIEW_SYSTEM = """You are a strict visual QA reviewer for AI-generated images (Agnes Image 2.1 Flash).
@@ -101,7 +132,32 @@ def _parse_review_json(content: str) -> dict:
     return obj
 
 
-class AgnesProvider(ImageProvider):
+def _message_text(data: dict) -> tuple[Optional[str], Optional[str]]:
+    """Return (content, finish_reason) from an OpenAI-style chat completion."""
+    try:
+        choice = data["choices"][0]
+        message = choice["message"]
+        content = message.get("content")
+        finish_reason = choice.get("finish_reason")
+    except (KeyError, IndexError, TypeError):
+        return None, None
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(str(part.get("text") or ""))
+            elif isinstance(part, str):
+                parts.append(part)
+        content = "".join(parts)
+
+    if content is None:
+        return None, str(finish_reason) if finish_reason is not None else None
+    text = str(content).strip()
+    return (text or None), str(finish_reason) if finish_reason is not None else None
+
+
+class AgnesProvider(ImageProvider, VideoProvider):
     def __init__(self, settings: Optional[Settings] = None, client: Optional[httpx.AsyncClient] = None):
         self.settings = settings or get_settings()
         self._client = client
@@ -123,6 +179,13 @@ class AgnesProvider(ImageProvider):
         if self._owns_client and self._client is not None:
             await self._client.aclose()
             self._client = None
+
+    def _gateway_root(self) -> str:
+        """Strip trailing /v1 from agnes_base_url for non-/v1 endpoints like /agnesapi."""
+        base = self.settings.agnes_base_url.rstrip("/")
+        if base.endswith("/v1"):
+            return base[: -len("/v1")]
+        return base
 
     def _to_data_uri(self, data: bytes) -> str:
         mime = "image/png"
@@ -191,7 +254,12 @@ class AgnesProvider(ImageProvider):
 
         raise GenerationError("Agnes image API returned neither b64_json nor url")
 
-    async def improve_prompt(self, text: str, category: Optional[str] = None) -> str:
+    async def improve_prompt(
+        self,
+        text: str,
+        category: Optional[str] = None,
+        kind: str = "image",
+    ) -> str:
         if not self.settings.agnes_api_key:
             raise GenerationError("AGNES_API_KEY is not configured")
 
@@ -200,10 +268,11 @@ class AgnesProvider(ImageProvider):
         if category:
             user_content = f"Category: {category}\n\nPrompt draft:\n{text}"
 
+        system = VIDEO_IMPROVE_SYSTEM if kind == "video" else IMPROVE_SYSTEM
         payload = {
             "model": CHAT_MODEL,
             "messages": [
-                {"role": "system", "content": IMPROVE_SYSTEM},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user_content},
             ],
             "temperature": 0.7,
@@ -225,18 +294,22 @@ class AgnesProvider(ImageProvider):
             )
 
         data = resp.json()
-        try:
-            content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise GenerationError("Unexpected Agnes chat response format") from exc
+        content, finish_reason = _message_text(data)
+        if content is None and finish_reason is None and "choices" not in data:
+            raise GenerationError("Unexpected Agnes chat response format")
+        if not content:
+            reason = f" (finish_reason={finish_reason})" if finish_reason else ""
+            raise GenerationError(f"Agnes chat returned empty content{reason}")
+        return content
 
-        if not content or not str(content).strip():
-            raise GenerationError("Agnes chat returned empty content")
-        return str(content).strip()
-
-    async def review_image(self, prompt: str, image: bytes) -> ImageReview:
+    async def review_image(self, prompt: str, image_url: str) -> ImageReview:
         if not self.settings.agnes_api_key:
             raise GenerationError("AGNES_API_KEY is not configured")
+        if not image_url or not image_url.startswith(("http://", "https://")):
+            raise GenerationError(
+                "Agnes review requires a publicly fetchable image URL "
+                "(configure PUBLIC_BASE_URL)"
+            )
 
         client = await self._get_client()
         user_text = (
@@ -254,7 +327,7 @@ class AgnesProvider(ImageProvider):
                         {"type": "text", "text": user_text},
                         {
                             "type": "image_url",
-                            "image_url": {"url": self._to_data_uri(image)},
+                            "image_url": {"url": image_url},
                         },
                     ],
                 },
@@ -278,15 +351,20 @@ class AgnesProvider(ImageProvider):
             )
 
         data = resp.json()
-        try:
-            content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise GenerationError("Unexpected Agnes review response format") from exc
+        content, finish_reason = _message_text(data)
+        if content is None and finish_reason is None and "choices" not in data:
+            raise GenerationError("Unexpected Agnes review response format")
+        if not content:
+            reason = f" (finish_reason={finish_reason})" if finish_reason else ""
+            logger.warning(
+                "Agnes review empty content%s image_url=%s keys=%s",
+                reason,
+                image_url[:120],
+                list(data.keys()) if isinstance(data, dict) else type(data),
+            )
+            raise GenerationError(f"Agnes review returned empty content{reason}")
 
-        if not content or not str(content).strip():
-            raise GenerationError("Agnes review returned empty content")
-
-        obj = _parse_review_json(str(content))
+        obj = _parse_review_json(content)
         try:
             score = int(obj.get("score", 0))
         except (TypeError, ValueError) as exc:
@@ -319,3 +397,143 @@ class AgnesProvider(ImageProvider):
             fix_mode=fix_mode,
             fix_instructions=fix_instructions,
         )
+
+    async def create_video_task(
+        self,
+        prompt: str,
+        *,
+        mode: str = "t2v",
+        image_urls: Optional[list[str]] = None,
+        width: int = 1152,
+        height: int = 768,
+        num_frames: int = 121,
+        frame_rate: float = 24,
+        seed: Optional[int] = None,
+        negative_prompt: Optional[str] = None,
+    ) -> VideoTaskRef:
+        if not self.settings.agnes_api_key:
+            raise GenerationError("AGNES_API_KEY is not configured")
+
+        client = await self._get_client()
+        payload: dict = {
+            "model": self.settings.agnes_video_model,
+            "prompt": prompt,
+            "height": height,
+            "width": width,
+            "num_frames": num_frames,
+            "frame_rate": frame_rate,
+        }
+        if seed is not None:
+            payload["seed"] = seed
+        if negative_prompt:
+            payload["negative_prompt"] = negative_prompt
+
+        urls = image_urls or []
+        if mode == "i2v":
+            if not urls:
+                raise GenerationError("image URL required for i2v mode")
+            payload["image"] = urls[0]
+        elif mode == "keyframes":
+            if len(urls) < 2:
+                raise GenerationError("at least 2 image URLs required for keyframes mode")
+            payload["extra_body"] = {"image": urls, "mode": "keyframes"}
+
+        try:
+            resp = await client.post("/videos", json=payload)
+        except httpx.TimeoutException as exc:
+            raise GenerationError("Agnes video API timed out") from exc
+        except httpx.HTTPError as exc:
+            raise GenerationError(f"Agnes video API network error: {exc}") from exc
+
+        if resp.status_code >= 400:
+            detail = resp.text[:500]
+            raise GenerationError(
+                f"Agnes video API error ({resp.status_code}): {detail}",
+                status_code=resp.status_code,
+            )
+
+        data = resp.json()
+        task_id = str(data.get("task_id") or data.get("id") or "")
+        video_id = str(data.get("video_id") or task_id)
+        if not video_id:
+            raise GenerationError("Agnes video API returned no video_id")
+        return VideoTaskRef(task_id=task_id or video_id, video_id=video_id)
+
+    async def get_video_result(self, video_id: str) -> VideoTaskResult:
+        if not self.settings.agnes_api_key:
+            raise GenerationError("AGNES_API_KEY is not configured")
+
+        client = await self._get_client()
+        url = urljoin(self._gateway_root() + "/", f"agnesapi?video_id={video_id}")
+        try:
+            resp = await client.get(url)
+        except httpx.TimeoutException as exc:
+            raise GenerationError("Agnes video status API timed out") from exc
+        except httpx.HTTPError as exc:
+            raise GenerationError(f"Agnes video status API network error: {exc}") from exc
+
+        if resp.status_code >= 400:
+            detail = resp.text[:500]
+            raise GenerationError(
+                f"Agnes video status API error ({resp.status_code}): {detail}",
+                status_code=resp.status_code,
+            )
+
+        data = resp.json()
+        status = str(data.get("status") or "queued").lower()
+        try:
+            progress = int(data.get("progress") or 0)
+        except (TypeError, ValueError):
+            progress = 0
+        progress = max(0, min(100, progress))
+
+        seconds: Optional[float] = None
+        raw_seconds = data.get("seconds")
+        if raw_seconds is not None:
+            try:
+                seconds = float(raw_seconds)
+            except (TypeError, ValueError):
+                seconds = None
+
+        size = data.get("size")
+        if size is not None:
+            size = str(size)
+
+        metadata = data.get("metadata") or {}
+        result_url = None
+        if isinstance(metadata, dict):
+            result_url = metadata.get("url")
+            if result_url is not None:
+                result_url = str(result_url)
+
+        error = None
+        err_field = data.get("error")
+        if err_field:
+            if isinstance(err_field, dict):
+                error = str(err_field.get("message") or err_field)
+            else:
+                error = str(err_field)
+
+        return VideoTaskResult(
+            status=status,
+            progress=progress,
+            url=result_url,
+            seconds=seconds,
+            size=size,
+            error=error,
+        )
+
+    async def download_video(self, url: str) -> bytes:
+        if not url:
+            raise GenerationError("Empty video URL")
+        client = await self._get_client()
+        try:
+            # Absolute URLs work with httpx even when the client has a base_url
+            _ = urlparse(url)
+            resp = await client.get(url)
+            resp.raise_for_status()
+            return resp.content
+        except httpx.TimeoutException as exc:
+            raise GenerationError("Timed out downloading generated video") from exc
+        except httpx.HTTPError as exc:
+            raise GenerationError(f"Failed to download generated video: {exc}") from exc

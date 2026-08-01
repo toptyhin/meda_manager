@@ -1,10 +1,10 @@
 # Media Manager
 
-Лёгкий медиа-менеджер с генерацией и редактированием изображений через [Agnes AI](https://www.agnes-ai.com/).
+Лёгкий медиа-менеджер с генерацией изображений и видео через [Agnes AI](https://www.agnes-ai.com/).
 
 - **Backend:** FastAPI + SQLite + uv (один процесс uvicorn, бюджет ~150 МБ RAM)
 - **Frontend:** React + Vite + Tailwind v4 + yarn
-- **Модели:** `agnes-image-2.1-flash` (генерация/edit), `agnes-2.5-flash` (улучшение промптов)
+- **Модели:** `agnes-image-2.1-flash` (изображения), `agnes-video-v2.0` (видео), `agnes-2.5-flash` (улучшение промптов)
 
 ## Возможности
 
@@ -15,6 +15,9 @@
 - Генерация и image-to-image редактирование (Agnes Image 2.1 Flash)
 - Опциональный автопайплайн: генерация → оценка качества (Agnes 2.5 Flash vision) → i2i-правка или регенерация
 - Медиа-грид: фильтры, сортировка, оценки 0–5
+- Генерация видео (Agnes Video V2.0): Оживлятор (i2v), Режиссёр (t2v), Сторимейкер (keyframes)
+- Пресеты для соцсетей, negative_prompt, seed, креативный ассистент для видео-промптов
+- Отдельная библиотека видео на странице `/video`
 
 ## Быстрый старт
 
@@ -77,8 +80,11 @@ docker compose down
 DOMAIN=media.example.com
 ACME_EMAIL=admin@example.com
 CORS_ORIGINS=https://media.example.com
+PUBLIC_BASE_URL=https://media.example.com
 # AGNES_API_KEY, JWT_SECRET, …
 ```
+
+`PUBLIC_BASE_URL` нужен для режимов видео с изображениями (i2v / keyframes): Agnes забирает исходники по подписанным ссылкам `/api/media-ingress/...`.
 
 3. Запуск:
 
@@ -125,7 +131,13 @@ uv run pytest
 | GET | `/api/images` | Список с фильтрами |
 | POST | `/api/generations` | Старт генерации → job (`auto_review` включает автопайплайн) |
 | GET | `/api/generations/{id}` | Статус job + шаги ревью (поллинг) |
-| POST | `/api/assistant/improve` | Улучшение промпта |
+| POST | `/api/video-generations` | Старт видео-генерации → async job |
+| GET | `/api/video-generations/{id}` | Статус видео-job + progress (поллинг) |
+| GET | `/api/videos` | Библиотека видео |
+| GET | `/api/videos/{id}/file` | Скачать mp4 (auth) |
+| GET | `/api/media-ingress/{id}` | Публичная HMAC-ссылка на изображение (для Agnes) |
+| POST | `/api/assistant/improve` | Улучшение image-промпта |
+| POST | `/api/assistant/video-improve` | Улучшение video-промпта |
 
 ### Автопайплайн качества
 

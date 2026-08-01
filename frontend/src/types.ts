@@ -108,3 +108,42 @@ export type Generation = {
   created_at: string
   finished_at: string | null
 }
+
+export type VideoMode = 't2v' | 'i2v' | 'keyframes'
+
+export type MediaVideo = {
+  id: number
+  width: number
+  height: number
+  duration: number
+  fps: number
+  seed: number | null
+  mode: VideoMode
+  prompt_text: string
+  negative_prompt: string | null
+  source_image_ids: number[]
+  category_id: number | null
+  created_at: string
+  file_url: string
+}
+
+export type VideoListResponse = {
+  items: MediaVideo[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export type VideoGeneration = {
+  id: number
+  mode: VideoMode
+  status: GenerationStatus
+  error: string | null
+  progress: number
+  params: Record<string, unknown>
+  provider_task_id: string | null
+  provider_video_id: string | null
+  result_video_id: number | null
+  created_at: string
+  finished_at: string | null
+}

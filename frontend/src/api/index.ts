@@ -7,10 +7,14 @@ import type {
   ImageListResponse,
   Invite,
   MediaImage,
+  MediaVideo,
   Prompt,
   PromptMode,
   PromptVersion,
   User,
+  VideoGeneration,
+  VideoListResponse,
+  VideoMode,
 } from '../types'
 
 export const authApi = {
@@ -114,4 +118,46 @@ export const assistantApi = {
       method: 'POST',
       json: { text, category_name },
     }),
+  improveVideo: (text: string, category_name?: string) =>
+    api<{ improved_text: string }>('/api/assistant/video-improve', {
+      method: 'POST',
+      json: { text, category_name },
+    }),
+}
+
+export const videoGenerationsApi = {
+  create: (body: {
+    mode: VideoMode
+    text: string
+    source_image_ids?: number[]
+    width: number
+    height: number
+    num_frames: number
+    frame_rate: number
+    seed?: number | null
+    negative_prompt?: string | null
+    category_id?: number | null
+  }) => api<VideoGeneration>('/api/video-generations', { method: 'POST', json: body }),
+  get: (id: number) => api<VideoGeneration>(`/api/video-generations/${id}`),
+  list: () => api<VideoGeneration[]>('/api/video-generations'),
+}
+
+export const videosApi = {
+  list: (params: {
+    mode?: VideoMode | ''
+    category_id?: number | ''
+    page?: number
+    page_size?: number
+  } = {}) => {
+    const sp = new URLSearchParams()
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== '' && v !== null) sp.set(k, String(v))
+    })
+    const q = sp.toString()
+    return api<VideoListResponse>(`/api/videos${q ? `?${q}` : ''}`)
+  },
+  get: (id: number) => api<MediaVideo>(`/api/videos/${id}`),
+  update: (id: number, body: { category_id?: number | null }) =>
+    api<MediaVideo>(`/api/videos/${id}`, { method: 'PATCH', json: body }),
+  remove: (id: number) => api<void>(`/api/videos/${id}`, { method: 'DELETE' }),
 }

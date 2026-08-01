@@ -27,6 +27,9 @@ export function Layout() {
             <NavLink to="/generate" className={linkClass}>
               Генерация
             </NavLink>
+            <NavLink to="/video" className={linkClass}>
+              Видео
+            </NavLink>
             {user?.is_admin && (
               <NavLink to="/invites" className={linkClass}>
                 Инвайты

@@ -38,6 +38,12 @@ class GenerationStatus(str, Enum):
     error = "error"
 
 
+class VideoMode(str, Enum):
+    t2v = "t2v"
+    i2v = "i2v"
+    keyframes = "keyframes"
+
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
 
@@ -143,5 +149,41 @@ class GenerationStep(SQLModel, table=True):
     review_issues: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
     review_fix_mode: Optional[str] = Field(default=None, max_length=16)
     error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    created_at: datetime = Field(default_factory=utcnow)
+    finished_at: Optional[datetime] = None
+
+
+class Video(SQLModel, table=True):
+    __tablename__ = "videos"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    path: str
+    width: int = 0
+    height: int = 0
+    duration: float = 0.0
+    fps: float = 24.0
+    seed: Optional[int] = None
+    mode: VideoMode = VideoMode.t2v
+    prompt_text: str = Field(sa_column=Column(Text, nullable=False))
+    negative_prompt: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    source_image_ids: str = Field(default="[]", sa_column=Column(Text, nullable=False))
+    category_id: Optional[int] = Field(default=None, foreign_key="categories.id")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class VideoGeneration(SQLModel, table=True):
+    __tablename__ = "video_generations"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True)
+    mode: VideoMode = VideoMode.t2v
+    status: GenerationStatus = GenerationStatus.pending
+    error: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    params: str = Field(default="{}", sa_column=Column(Text, nullable=False))
+    progress: int = 0
+    provider_task_id: Optional[str] = Field(default=None, max_length=128)
+    provider_video_id: Optional[str] = Field(default=None, max_length=128)
+    result_video_id: Optional[int] = Field(default=None, foreign_key="videos.id")
     created_at: datetime = Field(default_factory=utcnow)
     finished_at: Optional[datetime] = None

@@ -51,6 +51,7 @@ async def init_db() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.images_dir.mkdir(parents=True, exist_ok=True)
     settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
+    settings.videos_dir.mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
         await conn.run_sync(_migrate)

@@ -19,6 +19,7 @@ os.environ["JWT_SECRET"] = "test-secret-key-at-least-32-bytes-long"
 os.environ["AGNES_API_KEY"] = "test-key"
 os.environ["BOOTSTRAP_INVITE"] = "test-invite-code"
 os.environ["CORS_ORIGINS"] = "http://localhost:5173"
+os.environ["PUBLIC_BASE_URL"] = "http://test"
 
 from app.config import get_settings
 
@@ -33,6 +34,7 @@ async def setup_db() -> AsyncGenerator[None, None]:
     TEST_DATA.mkdir(parents=True, exist_ok=True)
     (TEST_DATA / "images").mkdir(exist_ok=True)
     (TEST_DATA / "thumbs").mkdir(exist_ok=True)
+    (TEST_DATA / "videos").mkdir(exist_ok=True)
 
     await engine.dispose()
     async with engine.begin() as conn:

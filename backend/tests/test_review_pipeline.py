@@ -127,6 +127,8 @@ async def test_auto_review_pass_first_attempt(auth_client: AsyncClient) -> None:
 
     assert generate.await_count == 1
     assert review.await_count == 1
+    review_url = review.await_args.args[1]
+    assert review_url.startswith("http://test/api/media-ingress/")
 
     resp = await auth_client.get("/api/images")
     assert resp.status_code == 200

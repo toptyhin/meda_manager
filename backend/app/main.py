@@ -13,7 +13,7 @@ from app.api import api_router
 from app.config import get_settings
 from app.db import async_session_factory, init_db
 from app.models import Invite
-from app.services.jobs import reap_stale_jobs
+from app.services.jobs import reap_stale_jobs, reap_stale_video_jobs
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -66,6 +66,9 @@ async def lifespan(_app: FastAPI):
     n = await reap_stale_jobs()
     if n:
         logger.info("Reaped %s stale generation jobs", n)
+    nv = await reap_stale_video_jobs()
+    if nv:
+        logger.info("Reaped %s stale video generation jobs", nv)
     await ensure_bootstrap_invite()
     yield
 

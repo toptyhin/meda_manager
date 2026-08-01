@@ -7,6 +7,7 @@ import { LoginPage } from './pages/LoginPage'
 import { MediaPage } from './pages/MediaPage'
 import { PromptsPage } from './pages/PromptsPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { VideoPage } from './pages/VideoPage'
 import type { ReactNode } from 'react'
 
 function Protected({ children }: { children: ReactNode }) {
@@ -43,6 +44,7 @@ export default function App() {
         <Route index element={<MediaPage />} />
         <Route path="prompts" element={<PromptsPage />} />
         <Route path="generate" element={<GeneratePage />} />
+        <Route path="video" element={<VideoPage />} />
         <Route
           path="invites"
           element={

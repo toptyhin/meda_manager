@@ -3,7 +3,7 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models import GenerationMode, GenerationStatus, ImageKind, PromptMode, PromptSource
+from app.models import GenerationMode, GenerationStatus, ImageKind, PromptMode, PromptSource, VideoMode
 
 
 # --- Auth ---
@@ -179,6 +179,61 @@ class GenerationOut(BaseModel):
     steps: list[GenerationStepOut] = Field(default_factory=list)
     created_at: datetime
     finished_at: Optional[datetime]
+
+
+# --- Videos ---
+class VideoGenerationCreate(BaseModel):
+    mode: VideoMode = VideoMode.t2v
+    text: str = Field(min_length=1)
+    source_image_ids: list[int] = Field(default_factory=list)
+    width: int = 1152
+    height: int = 768
+    num_frames: int = 121
+    frame_rate: float = 24
+    seed: Optional[int] = None
+    negative_prompt: Optional[str] = None
+    category_id: Optional[int] = None
+
+
+class VideoGenerationOut(BaseModel):
+    id: int
+    mode: VideoMode
+    status: GenerationStatus
+    error: Optional[str]
+    progress: int
+    params: dict
+    provider_task_id: Optional[str] = None
+    provider_video_id: Optional[str] = None
+    result_video_id: Optional[int]
+    created_at: datetime
+    finished_at: Optional[datetime]
+
+
+class VideoOut(BaseModel):
+    id: int
+    width: int
+    height: int
+    duration: float
+    fps: float
+    seed: Optional[int]
+    mode: VideoMode
+    prompt_text: str
+    negative_prompt: Optional[str]
+    source_image_ids: list[int]
+    category_id: Optional[int]
+    created_at: datetime
+    file_url: str
+
+
+class VideoUpdate(BaseModel):
+    category_id: Optional[int] = None
+
+
+class VideoListResponse(BaseModel):
+    items: list[VideoOut]
+    total: int
+    page: int
+    page_size: int
 
 
 # --- Assistant ---

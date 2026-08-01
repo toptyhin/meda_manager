@@ -16,15 +16,20 @@ class Settings(BaseSettings):
 
     agnes_api_key: str = ""
     agnes_base_url: str = "https://apihub.agnes-ai.com/v1"
+    agnes_video_model: str = "agnes-video-v2.0"
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 72
     data_dir: Path = ROOT_DIR / "data"
     frontend_dist: Path = ROOT_DIR / "frontend" / "dist"
     bootstrap_invite: str = ""
     cors_origins: str = "http://localhost:5173"
+    public_base_url: str = ""
     max_upload_mb: int = 10
     auto_review_max_fixes: int = 2
     auto_review_pass_score: int = 7
+    video_poll_interval: int = 5
+    video_poll_timeout: int = 900
+    media_link_ttl: int = 3600
 
 
     @property
@@ -38,6 +43,10 @@ class Settings(BaseSettings):
     @property
     def thumbs_dir(self) -> Path:
         return self.data_dir / "thumbs"
+
+    @property
+    def videos_dir(self) -> Path:
+        return self.data_dir / "videos"
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -7,6 +7,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.auth import get_current_user
+from app.config import get_settings
 from app.db import get_session
 from app.models import (
     Generation,
@@ -22,6 +23,7 @@ from app.schemas import GenerationCreate, GenerationOut, GenerationStepOut
 from app.services.jobs import run_generation
 
 router = APIRouter()
+settings = get_settings()
 
 ALLOWED_SIZES = {"1K", "2K", "3K", "4K"}
 ALLOWED_RATIOS = {"1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"}
@@ -121,6 +123,13 @@ async def create_generation(
 
     if not prompt_text:
         raise HTTPException(status_code=400, detail="text or prompt_version_id required")
+
+    if body.auto_review and not settings.public_base_url:
+        raise HTTPException(
+            status_code=400,
+            detail="PUBLIC_BASE_URL не настроен — авторевью недоступно "
+            "(Agnes нужен публичный URL картинки)",
+        )
 
     if body.mode == GenerationMode.edit:
         if body.parent_image_id is None:
