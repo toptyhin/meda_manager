@@ -632,13 +632,20 @@ class AgnesProvider(ImageProvider, VideoProvider):
     async def download_video(self, url: str) -> bytes:
         if not url:
             raise GenerationError("Empty video URL")
-        client = await self._get_client()
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise GenerationError("Invalid video URL")
+
+        # Output CDNs (e.g. platform-outputs.agnes-ai.space) reject the Agnes
+        # API Bearer token with 401 — fetch without auth / JSON content-type.
         try:
-            # Absolute URLs work with httpx even when the client has a base_url
-            _ = urlparse(url)
-            resp = await client.get(url)
-            resp.raise_for_status()
-            return resp.content
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(360.0, connect=30.0),
+                follow_redirects=True,
+            ) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+                return resp.content
         except httpx.TimeoutException as exc:
             raise GenerationError("Timed out downloading generated video") from exc
         except httpx.HTTPError as exc:

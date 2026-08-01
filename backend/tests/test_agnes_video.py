@@ -241,13 +241,26 @@ async def test_get_video_result_failed() -> None:
 async def test_download_video() -> None:
     settings = get_settings()
     content = b"fake-mp4-bytes"
-    respx.get("https://cdn.example.com/out.mp4").mock(
+    route = respx.get("https://cdn.example.com/out.mp4").mock(
         return_value=httpx.Response(200, content=content)
     )
     provider = AgnesProvider(settings=settings)
     try:
         data = await provider.download_video("https://cdn.example.com/out.mp4")
         assert data == content
+        assert route.called
+        # CDN downloads must not send the Agnes API Bearer token
+        assert "Authorization" not in route.calls[0].request.headers
+    finally:
+        await provider.aclose()
+
+
+@pytest.mark.asyncio
+async def test_download_video_rejects_bad_url() -> None:
+    provider = AgnesProvider(settings=get_settings())
+    try:
+        with pytest.raises(GenerationError, match="Invalid video URL"):
+            await provider.download_video("not-a-url")
     finally:
         await provider.aclose()
 
