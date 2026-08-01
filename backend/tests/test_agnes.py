@@ -143,6 +143,47 @@ async def test_review_image() -> None:
         assert b"image_url" in body
         assert b"https://example.com/api/media-ingress/1" in body
         assert b"data:image/" not in body
+        assert b'"max_tokens": 4096' in body or b'"max_tokens":4096' in body
+        assert b"enable_thinking" in body
+        assert b"false" in body
+    finally:
+        await provider.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_review_image_uses_reasoning_fallback() -> None:
+    settings = get_settings()
+    respx.post(f"{settings.agnes_base_url}/chat/completions").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": "r",
+                "choices": [
+                    {
+                        "index": 0,
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "reasoning_content": (
+                                '{"score": 8, "passed": true, "issues": [], '
+                                '"fix_mode": "i2i", "fix_instructions": ""}'
+                            ),
+                        },
+                        "finish_reason": "stop",
+                    }
+                ],
+            },
+        )
+    )
+    provider = AgnesProvider(settings=settings)
+    try:
+        review = await provider.review_image(
+            "a cat",
+            "https://example.com/img.png",
+        )
+        assert review.score == 8
+        assert review.passed is True
     finally:
         await provider.aclose()
 

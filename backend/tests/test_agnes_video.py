@@ -141,11 +141,71 @@ async def test_get_video_result_completed() -> None:
     try:
         result = await provider.get_video_result("video_xyz")
         assert route.called
+        assert "model_name=" in str(route.calls[0].request.url)
         assert result.status == "completed"
         assert result.progress == 100
         assert result.url == "https://cdn.example.com/out.mp4"
         assert result.seconds == 5.0
         assert result.size == "1280x720"
+    finally:
+        await provider.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_video_result_remixed_from_video_id() -> None:
+    """Live gateway often puts the mp4 URL in remixed_from_video_id."""
+    settings = get_settings()
+    root = settings.agnes_base_url.rstrip("/")
+    if root.endswith("/v1"):
+        root = root[: -len("/v1")]
+    respx.get(url__regex=rf"{root}/agnesapi\?video_id=video_live").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "video_id": "video_live",
+                "status": "completed",
+                "progress": 100,
+                "remixed_from_video_id": "https://storage.googleapis.com/agnes/out.mp4",
+                "error": None,
+            },
+        )
+    )
+    provider = AgnesProvider(settings=settings)
+    try:
+        result = await provider.get_video_result("video_live")
+        assert result.url == "https://storage.googleapis.com/agnes/out.mp4"
+    finally:
+        await provider.aclose()
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_get_video_result_fallback_legacy() -> None:
+    settings = get_settings()
+    root = settings.agnes_base_url.rstrip("/")
+    if root.endswith("/v1"):
+        root = root[: -len("/v1")]
+    respx.get(url__regex=rf"{root}/agnesapi\?video_id=video_fb").mock(
+        return_value=httpx.Response(
+            200,
+            json={"video_id": "video_fb", "status": "completed", "progress": 100},
+        )
+    )
+    respx.get(f"{settings.agnes_base_url}/videos/video_fb").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "status": "completed",
+                "progress": 100,
+                "url": "https://cdn.example.com/legacy.mp4",
+            },
+        )
+    )
+    provider = AgnesProvider(settings=settings)
+    try:
+        result = await provider.get_video_result("video_fb")
+        assert result.url == "https://cdn.example.com/legacy.mp4"
     finally:
         await provider.aclose()
 

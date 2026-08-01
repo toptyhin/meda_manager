@@ -110,7 +110,7 @@ Rules:
 - fix_mode="regen" when the image fails the prompt globally (wrong subject/scene/style) or is badly broken.
   fix_instructions then MUST be a full improved generation prompt that avoids the listed issues.
 - If the image is excellent, return passed=true, empty issues, fix_mode="i2i", fix_instructions="".
-- Output JSON only.
+- Output JSON only. Keep issues to at most 5 items; keep descriptions and fix_instructions concise.
 """
 
 
@@ -132,29 +132,83 @@ def _parse_review_json(content: str) -> dict:
     return obj
 
 
+def _coerce_text(value: object) -> Optional[str]:
+    """Normalize message content (string or text-part list) to a stripped string."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        parts: list[str] = []
+        for part in value:
+            if isinstance(part, dict) and part.get("type") == "text":
+                parts.append(str(part.get("text") or ""))
+            elif isinstance(part, str):
+                parts.append(part)
+        text = "".join(parts).strip()
+        return text or None
+    text = str(value).strip()
+    return text or None
+
+
 def _message_text(data: dict) -> tuple[Optional[str], Optional[str]]:
     """Return (content, finish_reason) from an OpenAI-style chat completion."""
     try:
         choice = data["choices"][0]
         message = choice["message"]
-        content = message.get("content")
         finish_reason = choice.get("finish_reason")
     except (KeyError, IndexError, TypeError):
         return None, None
 
-    if isinstance(content, list):
-        parts: list[str] = []
-        for part in content:
-            if isinstance(part, dict) and part.get("type") == "text":
-                parts.append(str(part.get("text") or ""))
-            elif isinstance(part, str):
-                parts.append(part)
-        content = "".join(parts)
+    content = _coerce_text(message.get("content"))
+    if not content:
+        # Some thinking-enabled responses leave content empty and put text elsewhere.
+        for key in ("reasoning_content", "reasoning", "thinking"):
+            content = _coerce_text(message.get(key))
+            if content:
+                break
 
-    if content is None:
-        return None, str(finish_reason) if finish_reason is not None else None
-    text = str(content).strip()
-    return (text or None), str(finish_reason) if finish_reason is not None else None
+    return content, str(finish_reason) if finish_reason is not None else None
+
+
+# Vision QA should return compact JSON; keep headroom above any accidental thinking tokens.
+REVIEW_MAX_TOKENS = 4096
+
+
+def _extract_video_url(data: dict) -> Optional[str]:
+    """Pick a downloadable video URL from varied Agnes response shapes."""
+    candidates: list[object] = []
+    metadata = data.get("metadata")
+    if isinstance(metadata, dict):
+        candidates.extend(
+            metadata.get(k) for k in ("url", "video_url", "output_url", "result_url")
+        )
+    elif isinstance(metadata, str):
+        candidates.append(metadata)
+
+    for key in (
+        "remixed_from_video_id",  # live gateway often puts the mp4 URL here
+        "video_url",
+        "url",
+        "output_url",
+        "result_url",
+    ):
+        candidates.append(data.get(key))
+
+    nested = data.get("data")
+    if isinstance(nested, list):
+        for item in nested:
+            if isinstance(item, dict):
+                found = _extract_video_url(item)
+                if found:
+                    return found
+    elif isinstance(nested, dict):
+        candidates.extend(
+            nested.get(k) for k in ("url", "video_url", "remixed_from_video_id")
+        )
+
+    for value in candidates:
+        if isinstance(value, str) and value.startswith(("http://", "https://")):
+            return value
+    return None
 
 
 class AgnesProvider(ImageProvider, VideoProvider):
@@ -333,7 +387,10 @@ class AgnesProvider(ImageProvider, VideoProvider):
                 },
             ],
             "temperature": 0.2,
-            "max_tokens": 1024,
+            "max_tokens": REVIEW_MAX_TOKENS,
+            # Review is structured JSON QA — thinking burns the token budget and can
+            # leave message.content empty with finish_reason=length.
+            "chat_template_kwargs": {"enable_thinking": False},
         }
 
         try:
@@ -356,12 +413,24 @@ class AgnesProvider(ImageProvider, VideoProvider):
             raise GenerationError("Unexpected Agnes review response format")
         if not content:
             reason = f" (finish_reason={finish_reason})" if finish_reason else ""
+            usage = data.get("usage") if isinstance(data, dict) else None
+            msg_keys: list[str] = []
+            try:
+                msg_keys = list(data["choices"][0]["message"].keys())
+            except (KeyError, IndexError, TypeError, AttributeError):
+                pass
             logger.warning(
-                "Agnes review empty content%s image_url=%s keys=%s",
+                "Agnes review empty content%s image_url=%s usage=%s message_keys=%s",
                 reason,
                 image_url[:120],
-                list(data.keys()) if isinstance(data, dict) else type(data),
+                usage,
+                msg_keys,
             )
+            if finish_reason == "length":
+                raise GenerationError(
+                    "Agnes review hit max_tokens before producing JSON "
+                    f"(max_tokens={REVIEW_MAX_TOKENS})"
+                )
             raise GenerationError(f"Agnes review returned empty content{reason}")
 
         obj = _parse_review_json(content)
@@ -459,27 +528,7 @@ class AgnesProvider(ImageProvider, VideoProvider):
             raise GenerationError("Agnes video API returned no video_id")
         return VideoTaskRef(task_id=task_id or video_id, video_id=video_id)
 
-    async def get_video_result(self, video_id: str) -> VideoTaskResult:
-        if not self.settings.agnes_api_key:
-            raise GenerationError("AGNES_API_KEY is not configured")
-
-        client = await self._get_client()
-        url = urljoin(self._gateway_root() + "/", f"agnesapi?video_id={video_id}")
-        try:
-            resp = await client.get(url)
-        except httpx.TimeoutException as exc:
-            raise GenerationError("Agnes video status API timed out") from exc
-        except httpx.HTTPError as exc:
-            raise GenerationError(f"Agnes video status API network error: {exc}") from exc
-
-        if resp.status_code >= 400:
-            detail = resp.text[:500]
-            raise GenerationError(
-                f"Agnes video status API error ({resp.status_code}): {detail}",
-                status_code=resp.status_code,
-            )
-
-        data = resp.json()
+    def _parse_video_status(self, data: dict) -> VideoTaskResult:
         status = str(data.get("status") or "queued").lower()
         try:
             progress = int(data.get("progress") or 0)
@@ -499,12 +548,7 @@ class AgnesProvider(ImageProvider, VideoProvider):
         if size is not None:
             size = str(size)
 
-        metadata = data.get("metadata") or {}
-        result_url = None
-        if isinstance(metadata, dict):
-            result_url = metadata.get("url")
-            if result_url is not None:
-                result_url = str(result_url)
+        result_url = _extract_video_url(data)
 
         error = None
         err_field = data.get("error")
@@ -522,6 +566,68 @@ class AgnesProvider(ImageProvider, VideoProvider):
             size=size,
             error=error,
         )
+
+    async def _fetch_video_json(self, path: str) -> dict:
+        client = await self._get_client()
+        try:
+            resp = await client.get(path)
+        except httpx.TimeoutException as exc:
+            raise GenerationError("Agnes video status API timed out") from exc
+        except httpx.HTTPError as exc:
+            raise GenerationError(f"Agnes video status API network error: {exc}") from exc
+
+        if resp.status_code >= 400:
+            detail = resp.text[:500]
+            raise GenerationError(
+                f"Agnes video status API error ({resp.status_code}): {detail}",
+                status_code=resp.status_code,
+            )
+        data = resp.json()
+        if not isinstance(data, dict):
+            raise GenerationError("Unexpected Agnes video status response format")
+        return data
+
+    async def get_video_result(self, video_id: str) -> VideoTaskResult:
+        if not self.settings.agnes_api_key:
+            raise GenerationError("AGNES_API_KEY is not configured")
+
+        model = self.settings.agnes_video_model
+        poll_path = urljoin(
+            self._gateway_root() + "/",
+            f"agnesapi?video_id={video_id}&model_name={model}",
+        )
+        data = await self._fetch_video_json(poll_path)
+        result = self._parse_video_status(data)
+
+        # Some gateway responses mark completed but put the URL only on the
+        # legacy task endpoint, or omit model_name-specific metadata.
+        if result.status == "completed" and not result.url:
+            for fallback in (
+                urljoin(self._gateway_root() + "/", f"agnesapi?video_id={video_id}"),
+                f"/videos/{video_id}",
+            ):
+                try:
+                    alt = await self._fetch_video_json(fallback)
+                except GenerationError as exc:
+                    logger.warning(
+                        "Agnes video URL fallback failed path=%s err=%s",
+                        fallback,
+                        exc.message,
+                    )
+                    continue
+                alt_result = self._parse_video_status(alt)
+                if alt_result.url:
+                    logger.info(
+                        "Agnes video URL recovered via fallback path=%s", fallback
+                    )
+                    return alt_result
+            logger.warning(
+                "Agnes video completed without URL video_id=%s keys=%s",
+                video_id,
+                list(data.keys()),
+            )
+
+        return result
 
     async def download_video(self, url: str) -> bytes:
         if not url:
