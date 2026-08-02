@@ -61,7 +61,12 @@ export type MediaImage = {
   file_url: string
 }
 
-export type ImproveKind = 'image' | 'video'
+export type ImproveKind =
+  | 'image_t2i'
+  | 'image_i2i'
+  | 'video_t2v'
+  | 'video_i2v'
+  | 'video_keyframes'
 
 export type ImproveTemplateVersion = {
   id: number

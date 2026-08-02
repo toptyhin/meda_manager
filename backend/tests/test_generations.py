@@ -135,6 +135,50 @@ async def test_t2i_prompt_without_reference_accepted(auth_client: AsyncClient) -
 
 @pytest.mark.asyncio
 @respx.mock
+async def test_i2i_without_text_uses_fallback_prompt(auth_client: AsyncClient) -> None:
+    _mock_agnes()
+    image_id = await _upload_image(auth_client)
+
+    resp = await auth_client.post(
+        "/api/generations",
+        json={"reference_image_ids": [image_id]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["params"]["text"] == (
+        "Enhance and refine this image while preserving its composition and subject"
+    )
+    await asyncio.sleep(0.5)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_multi_ref_without_text_uses_merge_prompt(auth_client: AsyncClient) -> None:
+    _mock_agnes()
+    first = await _upload_image(auth_client)
+    second = await _upload_image(auth_client)
+
+    resp = await auth_client.post(
+        "/api/generations",
+        json={"reference_image_ids": [first, second]},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["params"]["text"] == (
+        "Merge these images into one cohesive composition"
+    )
+    await asyncio.sleep(0.5)
+
+
+@pytest.mark.asyncio
+async def test_t2i_without_text_rejected(auth_client: AsyncClient) -> None:
+    resp = await auth_client.post(
+        "/api/generations",
+        json={"size": "1K", "ratio": "1:1"},
+    )
+    assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+@respx.mock
 async def test_generation_saves_prompt_text_on_image(auth_client: AsyncClient) -> None:
     _mock_agnes()
     prompt_text = "a red fox in snow, cinematic lighting"

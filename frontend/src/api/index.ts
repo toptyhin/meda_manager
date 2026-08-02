@@ -143,15 +143,25 @@ export const generationsApi = {
 }
 
 export const assistantApi = {
-  improve: (text: string, category_name?: string) =>
+  improve: (text: string, category_name?: string, mode?: PromptMode) =>
     api<{ improved_text: string }>('/api/assistant/improve', {
       method: 'POST',
-      json: { text, category_name },
+      json: { text, category_name, mode },
     }),
-  improveVideo: (text: string, category_name?: string) =>
+  improveVideo: (text: string, category_name?: string, mode?: VideoMode) =>
     api<{ improved_text: string }>('/api/assistant/video-improve', {
       method: 'POST',
-      json: { text, category_name },
+      json: { text, category_name, mode },
+    }),
+  describeImage: (image_id: number) =>
+    api<{ text: string }>('/api/assistant/describe-image', {
+      method: 'POST',
+      json: { image_id },
+    }),
+  extractStyle: (image_id: number) =>
+    api<{ text: string }>('/api/assistant/extract-style', {
+      method: 'POST',
+      json: { image_id },
     }),
   getTemplate: (kind: ImproveKind) =>
     api<ImproveTemplate>(`/api/assistant/templates/${kind}`),

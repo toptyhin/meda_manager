@@ -3,6 +3,7 @@ import pytest
 import respx
 
 from app.config import get_settings
+from app.models import ImproveKind
 from app.providers.agnes import AgnesProvider
 from app.providers.base import GenerationError
 
@@ -286,7 +287,7 @@ async def test_improve_video_prompt() -> None:
     )
     provider = AgnesProvider(settings=settings)
     try:
-        text = await provider.improve_prompt("танцовщица крутится", kind="video")
+        text = await provider.improve_prompt("танцовщица крутится", kind=ImproveKind.video_t2v)
         assert "dancer" in text.lower() or "cinematic" in text.lower()
         assert route.called
         body = route.calls[0].request.content

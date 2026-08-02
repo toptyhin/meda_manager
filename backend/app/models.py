@@ -45,8 +45,11 @@ class VideoMode(str, Enum):
 
 
 class ImproveKind(str, Enum):
-    image = "image"
-    video = "video"
+    image_t2i = "image_t2i"
+    image_i2i = "image_i2i"
+    video_t2v = "video_t2v"
+    video_i2v = "video_i2v"
+    video_keyframes = "video_keyframes"
 
 
 class StyleKind(str, Enum):

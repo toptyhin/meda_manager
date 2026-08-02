@@ -16,7 +16,7 @@ import {
   framesForDuration,
   randomSeed,
 } from '../../lib/videoPresets'
-import type { VideoGeneration, VideoMode } from '../../types'
+import type { ImproveKind, VideoGeneration, VideoMode } from '../../types'
 
 const MODES: { id: VideoMode; title: string; hint: string }[] = [
   { id: 'i2v', title: 'Оживлятор', hint: 'Фото → короткое анимированное видео' },
@@ -84,7 +84,7 @@ export function VideoGenerator() {
     setError(null)
     try {
       const catName = cats.data?.find((c) => c.id === categoryId)?.name
-      const { improved_text } = await assistantApi.improveVideo(text, catName)
+      const { improved_text } = await assistantApi.improveVideo(text, catName, mode)
       setText(improved_text)
     } catch (e) {
       setError(e instanceof ApiError ? e.detail : 'Не удалось улучшить промпт')
@@ -285,7 +285,10 @@ export function VideoGenerator() {
       </div>
 
       {showTplSettings && (
-        <ImproveTemplateModal kind="video" onClose={() => setShowTplSettings(false)} />
+        <ImproveTemplateModal
+          kind={`video_${mode}` as ImproveKind}
+          onClose={() => setShowTplSettings(false)}
+        />
       )}
     </div>
   )

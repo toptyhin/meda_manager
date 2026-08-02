@@ -10,15 +10,42 @@ type Props = {
   onClose: () => void
 }
 
+const KIND_GROUPS: { title: string; kinds: { kind: ImproveKind; label: string; hint: string }[] }[] = [
+  {
+    title: 'Изображения',
+    kinds: [
+      { kind: 'image_t2i', label: 't2i', hint: 'текст → изображение' },
+      { kind: 'image_i2i', label: 'i2i', hint: 'редактирование по референсу' },
+    ],
+  },
+  {
+    title: 'Видео',
+    kinds: [
+      { kind: 'video_t2v', label: 't2v', hint: 'текст → видео' },
+      { kind: 'video_i2v', label: 'i2v', hint: 'оживление фото' },
+      { kind: 'video_keyframes', label: 'keyframes', hint: 'переходы между кадрами' },
+    ],
+  },
+]
+
+function kindHint(kind: ImproveKind): string {
+  for (const g of KIND_GROUPS) {
+    const found = g.kinds.find((k) => k.kind === kind)
+    if (found) return `${g.title} · ${found.label} — ${found.hint}`
+  }
+  return kind
+}
+
 export function ImproveTemplateModal({ kind, onClose }: Props) {
   const qc = useQueryClient()
+  const [activeKind, setActiveKind] = useState<ImproveKind>(kind)
   const [draft, setDraft] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
 
   const template = useQuery({
-    queryKey: ['improve-template', kind],
-    queryFn: () => assistantApi.getTemplate(kind),
+    queryKey: ['improve-template', activeKind],
+    queryFn: () => assistantApi.getTemplate(activeKind),
   })
 
   useEffect(() => {
@@ -28,16 +55,23 @@ export function ImproveTemplateModal({ kind, onClose }: Props) {
   }, [template.data, dirty])
 
   const save = useMutation({
-    mutationFn: (text: string) => assistantApi.addTemplateVersion(kind, text),
+    mutationFn: (text: string) => assistantApi.addTemplateVersion(activeKind, text),
     onSuccess: async () => {
       setDirty(false)
       setError(null)
-      await qc.invalidateQueries({ queryKey: ['improve-template', kind] })
+      await qc.invalidateQueries({ queryKey: ['improve-template', activeKind] })
     },
     onError: (e) => {
       setError(e instanceof ApiError ? e.detail : 'Не удалось сохранить')
     },
   })
+
+  function switchKind(next: ImproveKind) {
+    if (next === activeKind) return
+    setActiveKind(next)
+    setDirty(false)
+    setError(null)
+  }
 
   function loadVersion(v: ImproveTemplateVersion) {
     setDraft(v.text)
@@ -52,8 +86,7 @@ export function ImproveTemplateModal({ kind, onClose }: Props) {
     setError(null)
   }
 
-  const title =
-    kind === 'image' ? 'Промпт улучшения изображений' : 'Промпт улучшения видео'
+  const title = 'Шаблоны улучшения промптов'
   const currentVersion = template.data?.version
   const canSave =
     draft.trim().length > 0 &&
@@ -68,8 +101,8 @@ export function ImproveTemplateModal({ kind, onClose }: Props) {
             <div>
               <h2 className="text-lg font-semibold">{title}</h2>
               <p className="text-xs text-muted mt-1">
-                Системный промпт для кнопки «Улучшить». Изменения сохраняются как
-                новые версии.
+                Системный промпт для кнопки «Улучшить» — отдельный на каждый режим
+                генерации. Изменения сохраняются как новые версии.
                 {template.data?.is_default
                   ? ' Сейчас используется значение по умолчанию.'
                   : currentVersion != null
@@ -86,6 +119,30 @@ export function ImproveTemplateModal({ kind, onClose }: Props) {
               ×
             </button>
           </div>
+
+          <div className="flex flex-wrap gap-x-5 gap-y-2">
+            {KIND_GROUPS.map((group) => (
+              <div key={group.title} className="flex items-center gap-1.5">
+                <span className="text-xs text-muted mr-1">{group.title}:</span>
+                {group.kinds.map((k) => (
+                  <button
+                    key={k.kind}
+                    type="button"
+                    onClick={() => switchKind(k.kind)}
+                    title={k.hint}
+                    className={`rounded-full px-2.5 py-1 text-xs border transition ${
+                      activeKind === k.kind
+                        ? 'bg-ink text-paper border-ink'
+                        : 'border-line text-muted hover:bg-line/40'
+                    }`}
+                  >
+                    {k.label}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-muted -mt-1">{kindHint(activeKind)}</div>
 
           {error && (
             <div className="rounded-md bg-bad/10 text-bad text-sm px-3 py-2">{error}</div>

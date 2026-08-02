@@ -279,10 +279,20 @@ class VideoListResponse(BaseModel):
 class ImproveRequest(BaseModel):
     text: str = Field(min_length=1)
     category_name: Optional[str] = None
+    # Image: "t2i" | "i2i"; video: "t2v" | "i2v" | "keyframes". None -> default mode.
+    mode: Optional[str] = None
 
 
 class ImproveResponse(BaseModel):
     improved_text: str
+
+
+class VisionPromptRequest(BaseModel):
+    image_id: int
+
+
+class VisionPromptResponse(BaseModel):
+    text: str
 
 
 class ImproveTemplateVersionCreate(BaseModel):

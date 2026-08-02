@@ -16,8 +16,9 @@ services:
     volumes:
       - mm-data:/data
     restart: unless-stopped
-    mem_limit: 180m
-    memswap_limit: 180m
+    # Pillow decode + thumb of phone photos needs headroom; 180m OOMs → Vite 502.
+    mem_limit: 512m
+    memswap_limit: 512m
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
       interval: 30s

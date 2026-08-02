@@ -14,6 +14,9 @@ type Props = {
   improving: boolean
   onImprove: () => void
   onShowTplSettings: () => void
+  canDescribe?: boolean
+  describing?: boolean
+  onDescribe?: () => void
   submitDisabled: boolean
   submitLabel: string
   busy: boolean
@@ -27,6 +30,9 @@ export function GenerateControls({
   improving,
   onImprove,
   onShowTplSettings,
+  canDescribe = false,
+  describing = false,
+  onDescribe,
   submitDisabled,
   submitLabel,
   busy,
@@ -81,6 +87,17 @@ export function GenerateControls({
         </span>
       </label>
       <div className="ml-auto self-end flex flex-wrap gap-2">
+        {onDescribe && (
+          <button
+            type="button"
+            disabled={!canDescribe || describing}
+            onClick={onDescribe}
+            title="Описать референс как готовый промпт (vision)"
+            className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-line/40 disabled:opacity-50"
+          >
+            {describing ? 'Описываем…' : 'Промпт из референса'}
+          </button>
+        )}
         <div className="inline-flex items-stretch gap-1">
           <button
             type="button"

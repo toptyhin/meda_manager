@@ -93,7 +93,7 @@ export function PromptEditorModal({ promptId, onClose, onCreated }: Props) {
     setError(null)
     try {
       const catName = cats.data?.find((c) => c.id === effectiveCategoryId)?.name
-      const { improved_text } = await assistantApi.improve(text, catName)
+      const { improved_text } = await assistantApi.improve(text, catName, mode)
       setText(improved_text)
       if (promptId != null) {
         await promptsApi.addVersion(promptId, improved_text, 'assistant')
@@ -283,7 +283,10 @@ export function PromptEditorModal({ promptId, onClose, onCreated }: Props) {
         )}
       </div>
       {showTplSettings && (
-        <ImproveTemplateModal kind="image" onClose={() => setShowTplSettings(false)} />
+        <ImproveTemplateModal
+          kind={mode === 'i2i' ? 'image_i2i' : 'image_t2i'}
+          onClose={() => setShowTplSettings(false)}
+        />
       )}
       </>
         )

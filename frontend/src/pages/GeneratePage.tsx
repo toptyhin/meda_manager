@@ -16,7 +16,7 @@ import {
   type GenPrefs,
 } from '../lib/genPrefs'
 import { useLocalStorageState } from '../lib/storage'
-import type { Generation } from '../types'
+import type { Generation, PromptMode } from '../types'
 
 export function GeneratePage() {
   const [params] = useSearchParams()
@@ -35,6 +35,7 @@ export function GeneratePage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [improving, setImproving] = useState(false)
+  const [describing, setDescribing] = useState(false)
   const [showTplSettings, setShowTplSettings] = useState(false)
 
   const size = isGenSize(genPrefs.size) ? genPrefs.size : DEFAULT_GEN_PREFS.size
@@ -55,6 +56,9 @@ export function GeneratePage() {
   )
   const needsRef = selectedPrompt?.mode === 'i2i'
   const hasReference = refs.length > 0 || editId != null
+  const imageMode: PromptMode = needsRef || hasReference ? 'i2i' : 't2i'
+  const describeSourceId =
+    refs.length === 1 ? refs[0] : editId != null && refs.length === 0 ? editId : null
 
   useEffect(() => {
     if (selectedPrompt?.current_version) {
@@ -83,7 +87,7 @@ export function GeneratePage() {
     setError(null)
     try {
       const catName = cats.data?.find((c) => c.id === categoryId)?.name
-      const { improved_text } = await assistantApi.improve(text, catName)
+      const { improved_text } = await assistantApi.improve(text, catName, imageMode)
       setText(improved_text)
       if (selectedPrompt != null) {
         await promptsApi.addVersion(selectedPrompt.id, improved_text, 'assistant')
@@ -93,6 +97,20 @@ export function GeneratePage() {
       setError(e instanceof ApiError ? e.detail : 'Не удалось улучшить промпт')
     } finally {
       setImproving(false)
+    }
+  }
+
+  async function describeFromRef() {
+    if (describeSourceId == null) return
+    setDescribing(true)
+    setError(null)
+    try {
+      const { text: described } = await assistantApi.describeImage(describeSourceId)
+      setText(described)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.detail : 'Не удалось описать изображение')
+    } finally {
+      setDescribing(false)
     }
   }
 
@@ -217,7 +235,14 @@ export function GeneratePage() {
             improving={improving}
             onImprove={() => void improve()}
             onShowTplSettings={() => setShowTplSettings(true)}
-            submitDisabled={!text || (needsRef && !hasReference) || Boolean(jobRunning)}
+            canDescribe={describeSourceId != null}
+            describing={describing}
+            onDescribe={() => void describeFromRef()}
+            submitDisabled={
+              (!text.trim() && !hasReference) ||
+              (needsRef && !hasReference) ||
+              Boolean(jobRunning)
+            }
             submitLabel={editId ? 'Редактировать' : 'Сгенерировать'}
             busy={busy}
             onSubmit={() => void start()}
@@ -234,7 +259,10 @@ export function GeneratePage() {
         />
       </div>
       {showTplSettings && (
-        <ImproveTemplateModal kind="image" onClose={() => setShowTplSettings(false)} />
+        <ImproveTemplateModal
+          kind={imageMode === 'i2i' ? 'image_i2i' : 'image_t2i'}
+          onClose={() => setShowTplSettings(false)}
+        />
       )}
     </div>
   )

@@ -7,8 +7,13 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.auth import get_current_user
 from app.config import get_settings
 from app.db import get_session
-from app.models import ImproveKind, ImprovePromptVersion, User
-from app.providers.agnes import IMPROVE_SYSTEM, VIDEO_IMPROVE_SYSTEM, AgnesProvider
+from app.models import Image, ImproveKind, ImprovePromptVersion, User
+from app.providers.agnes import (
+    DEFAULT_IMPROVE_TEMPLATES,
+    DESCRIBE_IMAGE_SYSTEM,
+    EXTRACT_STYLE_SYSTEM,
+    AgnesProvider,
+)
 from app.providers.base import GenerationError
 from app.schemas import (
     ImproveRequest,
@@ -16,13 +21,27 @@ from app.schemas import (
     ImproveTemplateOut,
     ImproveTemplateVersionCreate,
     ImproveTemplateVersionOut,
+    VisionPromptRequest,
+    VisionPromptResponse,
 )
+from app.services import imaging
 
 router = APIRouter()
 
 
 def _default_text(kind: ImproveKind) -> str:
-    return VIDEO_IMPROVE_SYSTEM if kind == ImproveKind.video else IMPROVE_SYSTEM
+    return DEFAULT_IMPROVE_TEMPLATES[kind]
+
+
+def _image_kind(mode: str | None) -> ImproveKind:
+    return ImproveKind.image_i2i if mode == "i2i" else ImproveKind.image_t2i
+
+
+def _video_kind(mode: str | None) -> ImproveKind:
+    return {
+        "i2v": ImproveKind.video_i2v,
+        "keyframes": ImproveKind.video_keyframes,
+    }.get(mode or "", ImproveKind.video_t2v)
 
 
 async def _list_versions(
@@ -136,11 +155,12 @@ async def improve_prompt(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ImproveResponse:
-    system = await _current_template(session, user.id, ImproveKind.image)  # type: ignore[arg-type]
+    kind = _image_kind(body.mode)
+    system = await _current_template(session, user.id, kind)  # type: ignore[arg-type]
     provider = AgnesProvider(settings=get_settings())
     try:
         improved = await provider.improve_prompt(
-            body.text, body.category_name, kind="image", system=system
+            body.text, body.category_name, kind=kind, system=system
         )
     except GenerationError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from exc
@@ -155,14 +175,71 @@ async def improve_video_prompt(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ImproveResponse:
-    system = await _current_template(session, user.id, ImproveKind.video)  # type: ignore[arg-type]
+    kind = _video_kind(body.mode)
+    system = await _current_template(session, user.id, kind)  # type: ignore[arg-type]
     provider = AgnesProvider(settings=get_settings())
     try:
         improved = await provider.improve_prompt(
-            body.text, body.category_name, kind="video", system=system
+            body.text, body.category_name, kind=kind, system=system
         )
     except GenerationError as exc:
         raise HTTPException(status_code=502, detail=exc.message) from exc
     finally:
         await provider.aclose()
     return ImproveResponse(improved_text=improved)
+
+
+async def _vision_prompt(
+    session: AsyncSession,
+    user: User,
+    image_id: int,
+    system: str,
+    instruction: str,
+) -> str:
+    img = await session.get(Image, image_id)
+    if img is None or img.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
+    settings = get_settings()
+    path = imaging.resolve_path(img.path, settings)
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File missing")
+
+    provider = AgnesProvider(settings=settings)
+    try:
+        return await provider.vision_prompt(path.read_bytes(), system, instruction)
+    except GenerationError as exc:
+        raise HTTPException(status_code=502, detail=exc.message) from exc
+    finally:
+        await provider.aclose()
+
+
+@router.post("/describe-image", response_model=VisionPromptResponse)
+async def describe_image(
+    body: VisionPromptRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> VisionPromptResponse:
+    text = await _vision_prompt(
+        session,
+        user,
+        body.image_id,
+        DESCRIBE_IMAGE_SYSTEM,
+        "Describe this image as an AI image generation prompt.",
+    )
+    return VisionPromptResponse(text=text)
+
+
+@router.post("/extract-style", response_model=VisionPromptResponse)
+async def extract_style(
+    body: VisionPromptRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> VisionPromptResponse:
+    text = await _vision_prompt(
+        session,
+        user,
+        body.image_id,
+        EXTRACT_STYLE_SYSTEM,
+        "Analyze the artistic style of this image and output a reusable style prompt.",
+    )
+    return VisionPromptResponse(text=text)

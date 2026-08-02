@@ -53,9 +53,12 @@ class ImageProvider(ABC):
         self,
         text: str,
         category: Optional[str] = None,
-        kind: str = "image",
+        kind: Optional[object] = None,
     ) -> str:
-        """Improve / structure a prompt for image or video generation."""
+        """Improve / structure a prompt for image or video generation.
+
+        ``kind`` selects the mode-specific default template (see ImproveKind).
+        """
 
     @abstractmethod
     async def review_image(self, prompt: str, image_url: str) -> ImageReview:

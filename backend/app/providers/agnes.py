@@ -8,6 +8,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from app.config import Settings, get_settings
+from app.models import ImproveKind
 from app.providers.base import (
     GenerationError,
     ImageProvider,
@@ -22,16 +23,27 @@ logger = logging.getLogger(__name__)
 IMAGE_MODEL = "agnes-image-2.1-flash"
 CHAT_MODEL = "agnes-2.5-flash"
 
-IMPROVE_SYSTEM = """You are an expert prompt engineer for the Agnes Image 2.1 Flash image generation model.
-Rewrite the user's draft into a clear, detail-rich English image-generation prompt.
+IMPROVE_SYSTEM_T2I = """You are an expert prompt engineer for the Agnes Image 2.1 Flash text-to-image model.
+Rewrite the user's draft into a clear, detail-rich English text-to-image prompt.
 
-Pick the structure that matches the request:
+Use this structure:
+[Subject] + [Scene / Environment] + [Style] + [Lighting] + [Color Palette / Mood] + [Composition / Camera Angle] + [Quality Requirements]
+Example: "A luminous floating city above a misty canyon at sunrise, cinematic realism, wide-angle composition, rich architectural details, soft golden light, warm amber and teal palette, serene epic mood, high visual density"
 
-Text-to-image:
-[Subject] + [Scene / Environment] + [Style] + [Lighting] + [Composition] + [Quality Requirements]
-Example: "A luminous floating city above a misty canyon at sunrise, cinematic realism, wide-angle composition, rich architectural details, soft golden light, high visual density"
+Rules:
+- Output ONLY the improved prompt text: no quotes, no explanations, no markdown, no labels such as "Prompt:".
+- Translate to English if the input is not English.
+- Preserve the user's intent and subject; expand it with vivid visual context: subject details, environment, lighting, color palette, composition, mood, camera angle, and style.
+- The model excels at complex, detail-rich visuals: describe the visual hierarchy — main subject, background environment, important secondary details, style and lighting, composition constraints.
+- Keep it a single concise paragraph, rich in concrete visual detail.
+"""
 
-Image-to-image editing:
+IMPROVE_SYSTEM_I2I = """You are an expert prompt engineer for the Agnes Image 2.1 Flash image-to-image editing model.
+The user edits one or more reference images. Rewrite the user's draft into a clear, detail-rich English editing instruction.
+
+Use the structure that matches the request:
+
+Single-reference edit:
 [Change Request] + [New Style / Scene] + [Elements to Add or Remove] + [Elements to Preserve]
 Example: "Turn the daytime street scene into a cinematic cyberpunk night scene, add neon signs and wet road reflections, while preserving the original street layout, camera angle, and main building shapes."
 
@@ -40,36 +52,72 @@ Multi-image composition:
 Example: "Use the first image as the main character and the second image as the product reference. Create a cinematic campaign poster that preserves the character identity and product shape, with natural lighting and a clean commercial composition."
 
 Rules:
-- Output ONLY the improved prompt text: no quotes, no explanations, no markdown.
+- Output ONLY the improved prompt text: no quotes, no explanations, no markdown, no labels such as "Prompt:".
 - Translate to English if the input is not English.
-- Preserve the user's intent, subject, and any reference-image roles (person, bag, glasses, etc.).
-- The model excels at complex, detail-rich visuals: describe the visual hierarchy — main subject, background environment, important secondary details, style and lighting, composition constraints.
-- For edit requests, clearly state what to change and what to preserve.
+- Preserve the user's intent and any reference-image roles (person, bag, glasses, etc.); state reference roles explicitly ("the first image", "the second image").
+- Clearly state what to change and what to preserve (subject identity, composition, camera angle, key details).
 - Keep it a single concise paragraph, rich in concrete visual detail.
 """
 
-VIDEO_IMPROVE_SYSTEM = """You are an expert prompt engineer for the Agnes Video V2.0 video generation model.
-Rewrite the user's draft into a clear, detail-rich English video-generation prompt.
+VIDEO_IMPROVE_SYSTEM_T2V = """You are an expert prompt engineer for the Agnes Video V2.0 text-to-video model.
+Rewrite the user's draft into a clear, detail-rich English text-to-video prompt.
 
 Use this structure:
 [Subject] + [Action] + [Scene] + [Camera Movement] + [Lighting] + [Style]
 Example: "A young astronaut walking across a red desert planet, dust blowing in the wind, slow cinematic tracking shot, dramatic sunset lighting, realistic sci-fi style"
 
-For image-to-video (animating a still photo):
-Describe what should move and which key subject elements should remain stable.
-Example: "Animate the character with subtle breathing motion, hair moving gently in the wind, background lights flickering softly, while keeping the face and outfit consistent"
-
-For keyframe transitions:
-Clearly describe the transition relationship between keyframes.
-Example: "Create a smooth transition from the first keyframe to the second keyframe, maintaining character identity, consistent camera angle, and natural motion between scenes"
-
 Rules:
-- Output ONLY the improved prompt text: no quotes, no explanations, no markdown.
+- Output ONLY the improved prompt text: no quotes, no explanations, no markdown, no labels such as "Prompt:".
 - Translate to English if the input is not English.
 - Preserve the user's intent, subject, camera style, and any motion cues.
 - Prefer concrete, cinematic language: subject actions, camera movement, lighting, style.
 - Keep it a single concise paragraph, rich in concrete visual and motion detail.
 """
+
+VIDEO_IMPROVE_SYSTEM_I2V = """You are an expert prompt engineer for the Agnes Video V2.0 image-to-video model.
+The user animates a still reference image. Rewrite the user's draft into a clear, detail-rich English animation instruction.
+
+Use this structure:
+[Motion of the Main Subject] + [Secondary / Background Motion] + [Camera Movement] + [Elements to Keep Stable] + [Style / Mood]
+Example: "Animate the character with subtle breathing motion, hair moving gently in the wind, background lights flickering softly, slow push-in camera, while keeping the face and outfit consistent, cinematic mood"
+
+Rules:
+- Output ONLY the improved prompt text: no quotes, no explanations, no markdown, no labels such as "Prompt:".
+- Translate to English if the input is not English.
+- Describe what should move and which key subject elements (identity, face, outfit, composition) should remain stable.
+- Do not redescribe the static scene in detail — the reference image defines it; focus on motion and temporal changes.
+- Keep it a single concise paragraph, rich in concrete motion detail.
+"""
+
+VIDEO_IMPROVE_SYSTEM_KEYFRAMES = """You are an expert prompt engineer for the Agnes Video V2.0 keyframe interpolation model.
+The user provides first and last keyframes. Rewrite the user's draft into a clear, detail-rich English transition description.
+
+Use this structure:
+[Transition Between Keyframes] + [Motion / Action] + [Camera Behavior] + [Elements to Keep Consistent] + [Style / Pacing]
+Example: "Create a smooth transition from the first keyframe to the second keyframe, the character turns and walks toward the camera, maintaining character identity, consistent camera angle, and natural motion between scenes, cinematic pacing"
+
+Rules:
+- Output ONLY the improved prompt text: no quotes, no explanations, no markdown, no labels such as "Prompt:".
+- Translate to English if the input is not English.
+- Clearly describe the transition relationship between the keyframes: what changes, how it moves, and what stays consistent (identity, lighting, style).
+- Keep it a single concise paragraph, rich in concrete motion and transition detail.
+"""
+
+DEFAULT_IMPROVE_TEMPLATES: dict[ImproveKind, str] = {
+    ImproveKind.image_t2i: IMPROVE_SYSTEM_T2I,
+    ImproveKind.image_i2i: IMPROVE_SYSTEM_I2I,
+    ImproveKind.video_t2v: VIDEO_IMPROVE_SYSTEM_T2V,
+    ImproveKind.video_i2v: VIDEO_IMPROVE_SYSTEM_I2V,
+    ImproveKind.video_keyframes: VIDEO_IMPROVE_SYSTEM_KEYFRAMES,
+}
+
+DESCRIBE_IMAGE_SYSTEM = """You are an expert at analyzing images and writing AI image generation prompts.
+Describe this image in extreme detail: subject, composition, lighting, color palette, style, mood, camera angle, depth of field, textures, and distinctive elements.
+Output ONLY the prompt, no commentary."""
+
+EXTRACT_STYLE_SYSTEM = """Analyze the artistic style of this image. Identify the art movement, technique, color palette, brushwork, lighting approach, and composition style.
+Output ONLY a prompt that captures this artistic style for AI image generation.
+Do not describe the image content or subject matter."""
 
 REVIEW_SYSTEM = """You are a strict visual QA reviewer for AI-generated images (Agnes Image 2.1 Flash).
 
@@ -112,6 +160,26 @@ Rules:
 - If the image is excellent, return passed=true, empty issues, fix_mode="i2i", fix_instructions="".
 - Output JSON only. Keep issues to at most 5 items; keep descriptions and fix_instructions concise.
 """
+
+
+_CLEAN_PREFIX_PATTERNS = (
+    r"^\*\*prompt:\*\*\s*",
+    r"^prompt:\s*",
+    r"^\*\*enhanced prompt:\*\*\s*",
+    r"^enhanced prompt:\s*",
+    r"^\*\*improved prompt:\*\*\s*",
+    r"^improved prompt:\s*",
+    r"^\*\*output:\*\*\s*",
+    r"^output:\s*",
+)
+
+
+def _clean_prompt_output(text: str) -> str:
+    """Strip service labels the chat model sometimes prepends despite instructions."""
+    cleaned = text.strip()
+    for pattern in _CLEAN_PREFIX_PATTERNS:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 
 def _parse_review_json(content: str) -> dict:
@@ -308,55 +376,88 @@ class AgnesProvider(ImageProvider, VideoProvider):
 
         raise GenerationError("Agnes image API returned neither b64_json nor url")
 
-    async def improve_prompt(
-        self,
-        text: str,
-        category: Optional[str] = None,
-        kind: str = "image",
-        system: Optional[str] = None,
-    ) -> str:
-        if not self.settings.agnes_api_key:
-            raise GenerationError("AGNES_API_KEY is not configured")
-
+    async def _chat_text(self, payload: dict, api_label: str = "chat") -> str:
         client = await self._get_client()
-        user_content = text
-        if category:
-            user_content = f"Category: {category}\n\nPrompt draft:\n{text}"
-
-        if not system:
-            system = VIDEO_IMPROVE_SYSTEM if kind == "video" else IMPROVE_SYSTEM
-        payload = {
-            "model": CHAT_MODEL,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user_content},
-            ],
-            "temperature": 0.7,
-            "max_tokens": 1024,
-        }
-
         try:
             resp = await client.post("/chat/completions", json=payload)
         except httpx.TimeoutException as exc:
-            raise GenerationError("Agnes chat API timed out") from exc
+            raise GenerationError(f"Agnes {api_label} API timed out") from exc
         except httpx.HTTPError as exc:
-            raise GenerationError(f"Agnes chat API network error: {exc}") from exc
+            raise GenerationError(f"Agnes {api_label} API network error: {exc}") from exc
 
         if resp.status_code >= 400:
             detail = resp.text[:500]
             raise GenerationError(
-                f"Agnes chat API error ({resp.status_code}): {detail}",
+                f"Agnes {api_label} API error ({resp.status_code}): {detail}",
                 status_code=resp.status_code,
             )
 
         data = resp.json()
         content, finish_reason = _message_text(data)
         if content is None and finish_reason is None and "choices" not in data:
-            raise GenerationError("Unexpected Agnes chat response format")
+            raise GenerationError(f"Unexpected Agnes {api_label} response format")
         if not content:
             reason = f" (finish_reason={finish_reason})" if finish_reason else ""
-            raise GenerationError(f"Agnes chat returned empty content{reason}")
+            raise GenerationError(f"Agnes {api_label} returned empty content{reason}")
         return content
+
+    async def improve_prompt(
+        self,
+        text: str,
+        category: Optional[str] = None,
+        kind: ImproveKind = ImproveKind.image_t2i,
+        system: Optional[str] = None,
+    ) -> str:
+        if not self.settings.agnes_api_key:
+            raise GenerationError("AGNES_API_KEY is not configured")
+
+        user_content = text
+        if category:
+            user_content = f"Category: {category}\n\nPrompt draft:\n{text}"
+
+        if not system:
+            system = DEFAULT_IMPROVE_TEMPLATES.get(kind, IMPROVE_SYSTEM_T2I)
+        payload = {
+            "model": CHAT_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_content},
+            ],
+            "temperature": 0.3,
+            "max_tokens": 2048,
+        }
+        content = await self._chat_text(payload)
+        return _clean_prompt_output(content)
+
+    async def vision_prompt(
+        self,
+        image: bytes,
+        system: str,
+        instruction: str = "Describe this image as an AI image generation prompt.",
+    ) -> str:
+        if not self.settings.agnes_api_key:
+            raise GenerationError("AGNES_API_KEY is not configured")
+
+        payload = {
+            "model": CHAT_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": self._to_data_uri(image)},
+                        },
+                        {"type": "text", "text": instruction},
+                    ],
+                },
+            ],
+            "temperature": 0.3,
+            "max_tokens": 2048,
+        }
+        content = await self._chat_text(payload, api_label="vision")
+        return _clean_prompt_output(content)
 
     async def review_image(self, prompt: str, image_url: str) -> ImageReview:
         if not self.settings.agnes_api_key:

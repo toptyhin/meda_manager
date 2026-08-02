@@ -122,7 +122,18 @@ async def create_generation(
             prompt_text = version.text
 
     if not prompt_text:
-        raise HTTPException(status_code=400, detail="text or prompt_version_id required")
+        ref_count = len(body.reference_image_ids) + (
+            1 if body.parent_image_id is not None else 0
+        )
+        if ref_count > 1:
+            prompt_text = "Merge these images into one cohesive composition"
+        elif ref_count == 1:
+            prompt_text = (
+                "Enhance and refine this image while preserving its "
+                "composition and subject"
+            )
+        else:
+            raise HTTPException(status_code=400, detail="text or prompt_version_id required")
 
     if body.auto_review and not settings.public_base_url:
         raise HTTPException(

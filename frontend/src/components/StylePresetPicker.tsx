@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { stylesApi } from '../api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { assistantApi, imagesApi, stylesApi } from '../api'
+import { ApiError } from '../api/client'
 import { insertSnippet, removeSnippet, snippetOf } from '../lib/styleSnippets'
-import type { StylePreset } from '../types'
+import { AuthedImage } from './AuthedImage'
+import { Modal } from './Modal'
+import type { MediaImage, StylePreset } from '../types'
 
 type Props = {
   kind: 'image' | 'video'
@@ -11,13 +14,48 @@ type Props = {
 }
 
 export function StylePresetPicker({ kind, text, onChange }: Props) {
+  const qc = useQueryClient()
   const [open, setOpen] = useState(false)
   const [activeCat, setActiveCat] = useState<string | 'all'>('all')
+  const [styleFromImageOpen, setStyleFromImageOpen] = useState(false)
+  const [extractingId, setExtractingId] = useState<number | null>(null)
+  const [extractError, setExtractError] = useState<string | null>(null)
 
   const styles = useQuery({
     queryKey: ['styles', kind],
     queryFn: () => stylesApi.list(kind),
   })
+
+  const sourceImages = useQuery({
+    queryKey: ['images', 'style-source'],
+    queryFn: () =>
+      imagesApi.list({ page_size: 24, sort: 'created_at', order: 'desc' }),
+    enabled: styleFromImageOpen,
+  })
+
+  async function extractFromImage(img: MediaImage) {
+    setExtractingId(img.id)
+    setExtractError(null)
+    try {
+      const { text: styleText } = await assistantApi.extractStyle(img.id)
+      const title = window.prompt('Название нового стиля', 'Стиль из изображения')
+      if (title?.trim()) {
+        await stylesApi.create({
+          title: title.trim(),
+          category: 'Из изображений',
+          kind,
+          text: styleText,
+          description: `Извлечён из изображения #${img.id}`,
+        })
+        await qc.invalidateQueries({ queryKey: ['styles'] })
+        setStyleFromImageOpen(false)
+      }
+    } catch (e) {
+      setExtractError(e instanceof ApiError ? e.detail : 'Не удалось извлечь стиль')
+    } finally {
+      setExtractingId(null)
+    }
+  }
 
   const filtered = useMemo(() => styles.data ?? [], [styles.data])
 
@@ -69,13 +107,24 @@ export function StylePresetPicker({ kind, text, onChange }: Props) {
         </div>
       )}
 
-      <div>
+      <div className="flex gap-1.5">
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-line/40"
         >
           {open ? 'Скрыть стили' : 'Стиль'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setExtractError(null)
+            setStyleFromImageOpen(true)
+          }}
+          title="Извлечь художественный стиль из изображения (vision)"
+          className="rounded-md border border-line px-2.5 py-1 text-xs hover:bg-line/40"
+        >
+          Из изображения…
         </button>
       </div>
 
@@ -142,6 +191,78 @@ export function StylePresetPicker({ kind, text, onChange }: Props) {
             })}
           </div>
         </div>
+      )}
+
+      {styleFromImageOpen && (
+        <Modal
+          onClose={() => setStyleFromImageOpen(false)}
+          label="Стиль из изображения"
+          className="max-w-2xl"
+        >
+          {(close) => (
+            <div className="p-5 space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">Стиль из изображения</h2>
+                  <p className="text-xs text-muted mt-1">
+                    Выберите изображение — ИИ извлечёт из него художественный стиль
+                    и сохранит как новый пресет.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={close}
+                  className="text-muted hover:text-ink text-xl leading-none"
+                  aria-label="Закрыть"
+                >
+                  ×
+                </button>
+              </div>
+
+              {extractError && (
+                <div className="rounded-md bg-bad/10 text-bad text-sm px-3 py-2">
+                  {extractError}
+                </div>
+              )}
+
+              {sourceImages.isLoading && (
+                <div className="text-sm text-muted">Загрузка изображений…</div>
+              )}
+              {sourceImages.data && sourceImages.data.items.length === 0 && (
+                <div className="text-sm text-muted border border-dashed border-line rounded-lg p-4">
+                  Нет загруженных изображений — сначала загрузите референсы.
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-80 overflow-auto">
+                {sourceImages.data?.items.map((img) => {
+                  const extracting = extractingId === img.id
+                  return (
+                    <button
+                      key={img.id}
+                      type="button"
+                      disabled={extractingId != null}
+                      onClick={() => void extractFromImage(img)}
+                      className="relative rounded-lg overflow-hidden border border-line hover:border-accent transition disabled:opacity-60"
+                      title={`Изображение #${img.id}`}
+                    >
+                      <AuthedImage
+                        src={img.thumb_url}
+                        alt={`Изображение #${img.id}`}
+                        className="w-full aspect-square object-cover"
+                      />
+                      {extracting && (
+                        <span className="absolute inset-0 grid place-items-center bg-ink/50 text-paper text-xs">
+                          Извлекаем…
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   )

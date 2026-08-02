@@ -46,6 +46,14 @@ def _migrate(conn) -> None:
     if "review_passed" not in generations_cols:
         conn.execute(text("ALTER TABLE generations ADD COLUMN review_passed BOOLEAN"))
 
+    # ImproveKind was split per generation mode; re-tag existing template rows.
+    conn.execute(
+        text("UPDATE improve_prompt_versions SET kind = 'image_t2i' WHERE kind = 'image'")
+    )
+    conn.execute(
+        text("UPDATE improve_prompt_versions SET kind = 'video_t2v' WHERE kind = 'video'")
+    )
+
     images_cols = {c["name"] for c in inspect(conn).get_columns("images")}
     if "prompt_text" not in images_cols:
         conn.execute(text("ALTER TABLE images ADD COLUMN prompt_text TEXT"))
