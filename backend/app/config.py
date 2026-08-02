@@ -17,6 +17,25 @@ class Settings(BaseSettings):
     agnes_api_key: str = ""
     agnes_base_url: str = "https://apihub.agnes-ai.com/v1"
     agnes_video_model: str = "agnes-video-v2.0"
+
+    # Comma-separated provider ids. Chat providers besides Agnes need their API keys.
+    enabled_providers: str = "agnes"
+    default_chat_provider: str = "agnes"
+
+    atlas_api_key: str = ""
+    atlas_base_url: str = "https://api.atlascloud.ai/v1"
+    atlas_chat_model: str = "deepseek-ai/DeepSeek-V3.1"
+
+    crazyrouter_api_key: str = ""
+    crazyrouter_base_url: str = "https://api.crazyrouter.com/v1"
+    crazyrouter_chat_model: str = "gpt-5.5"
+
+    nordrouter_api_key: str = ""
+    nordrouter_base_url: str = "https://nordrouter.com/v1"
+    nordrouter_chat_model: str = "anthropic/claude-sonnet-4.6"
+
+    model_catalog_ttl_seconds: int = 43200
+
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 72
     data_dir: Path = ROOT_DIR / "data"
@@ -51,6 +70,10 @@ class Settings(BaseSettings):
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+
+    @property
+    def enabled_provider_list(self) -> list[str]:
+        return [p.strip().lower() for p in self.enabled_providers.split(",") if p.strip()]
 
 
 @lru_cache

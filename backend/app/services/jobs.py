@@ -24,6 +24,7 @@ from app.providers.agnes import AgnesProvider
 from app.providers.base import GenerationError, ImageProvider, ImageReview, VideoProvider
 from app.services import imaging, video as video_service
 from app.services.media_links import build_signed_image_url
+from app.services.provider_runtime import build_agnes_settings
 
 logger = logging.getLogger(__name__)
 
@@ -166,9 +167,11 @@ async def _finish_job(
 
 async def run_generation(job_id: int) -> None:
     settings = get_settings()
-    provider: ImageProvider = AgnesProvider(settings=settings)
+    provider: ImageProvider | None = None
     try:
         async with async_session_factory() as session:
+            settings = await build_agnes_settings(session)
+            provider = AgnesProvider(settings=settings)
             job = await session.get(Generation, job_id)
             if job is None:
                 return
@@ -408,7 +411,8 @@ async def run_generation(job_id: int) -> None:
                 session.add(job)
                 await session.commit()
     finally:
-        await provider.aclose()
+        if provider is not None:
+            await provider.aclose()
 
 
 def _parse_size(size: Optional[str], fallback_w: int, fallback_h: int) -> tuple[int, int]:
@@ -423,9 +427,11 @@ def _parse_size(size: Optional[str], fallback_w: int, fallback_h: int) -> tuple[
 
 async def run_video_generation(job_id: int) -> None:
     settings = get_settings()
-    provider: VideoProvider = AgnesProvider(settings=settings)
+    provider: VideoProvider | None = None
     try:
         async with async_session_factory() as session:
+            settings = await build_agnes_settings(session)
+            provider = AgnesProvider(settings=settings)
             job = await session.get(VideoGeneration, job_id)
             if job is None:
                 return
@@ -602,4 +608,5 @@ async def run_video_generation(job_id: int) -> None:
                 session.add(job)
                 await session.commit()
     finally:
-        await provider.aclose()  # type: ignore[attr-defined]
+        if provider is not None:
+            await provider.aclose()  # type: ignore[attr-defined]

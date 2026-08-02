@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Optional
+from dataclasses import asdict, dataclass, field
+from typing import Any, Optional
 
 
 class GenerationError(Exception):
@@ -35,6 +35,49 @@ class VideoTaskResult:
     seconds: Optional[float] = None
     size: Optional[str] = None  # e.g. "1280x768"
     error: Optional[str] = None
+
+
+@dataclass
+class ModelPricing:
+    prompt_per_1m: Optional[float] = None
+    completion_per_1m: Optional[float] = None
+    image: Optional[float] = None
+    request: Optional[float] = None
+    input_cache_read_per_1m: Optional[float] = None
+    unit: Optional[str] = None  # "token" | "image" | "request"
+
+
+@dataclass
+class ModelInfo:
+    id: str
+    provider: str
+    kind: str  # chat | image | video | audio | embedding | other
+    context_length: Optional[int] = None
+    max_output_length: Optional[int] = None
+    input_modalities: list[str] = field(default_factory=list)
+    output_modalities: list[str] = field(default_factory=list)
+    pricing: Optional[ModelPricing] = None
+    raw: dict = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "ModelInfo":
+        pricing_raw = data.get("pricing")
+        pricing = ModelPricing(**pricing_raw) if isinstance(pricing_raw, dict) else None
+        return cls(
+            id=str(data["id"]),
+            provider=str(data["provider"]),
+            kind=str(data.get("kind") or "other"),
+            context_length=data.get("context_length"),
+            max_output_length=data.get("max_output_length"),
+            input_modalities=list(data.get("input_modalities") or []),
+            output_modalities=list(data.get("output_modalities") or []),
+            pricing=pricing,
+            raw=dict(data.get("raw") or {}),
+        )
 
 
 class ImageProvider(ABC):
@@ -93,3 +136,36 @@ class VideoProvider(ABC):
     @abstractmethod
     async def download_video(self, url: str) -> bytes:
         """Download generated video bytes from a result URL."""
+
+
+class ChatProvider(ABC):
+    @abstractmethod
+    async def improve_prompt(
+        self,
+        text: str,
+        category: Optional[str] = None,
+        kind: Optional[object] = None,
+        system: Optional[str] = None,
+    ) -> str:
+        """Improve / structure a prompt using a chat/LLM model."""
+
+    @abstractmethod
+    async def vision_prompt(
+        self,
+        image: bytes,
+        system: str,
+        instruction: str = "Describe this image as an AI image generation prompt.",
+    ) -> str:
+        """Build a prompt from an image via a vision-capable chat model."""
+
+    async def aclose(self) -> None:
+        """Close any owned HTTP resources. Default is a no-op."""
+
+
+class ModelCatalog(ABC):
+    @abstractmethod
+    async def list_models(self) -> list[ModelInfo]:
+        """Return available models for this provider (normalized)."""
+
+    async def aclose(self) -> None:
+        """Close any owned HTTP resources. Default is a no-op."""

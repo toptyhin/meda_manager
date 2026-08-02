@@ -230,3 +230,38 @@ class StylePreset(SQLModel, table=True):
     kind: StyleKind = StyleKind.both
     text: str = Field(sa_column=Column(Text, nullable=False))
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class ProviderModelCache(SQLModel, table=True):
+    """TTL cache for normalized provider model catalogs."""
+
+    __tablename__ = "provider_model_cache"
+
+    provider: str = Field(primary_key=True, max_length=32)
+    payload: str = Field(sa_column=Column(Text, nullable=False))
+    fetched_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime = Field(index=True)
+
+
+class ProviderCredential(SQLModel, table=True):
+    """Admin-managed provider credentials (overrides env when set)."""
+
+    __tablename__ = "provider_credentials"
+
+    provider: str = Field(primary_key=True, max_length=32)
+    api_key: str = Field(default="", sa_column=Column(Text, nullable=False))
+    enabled: bool = True
+    base_url: Optional[str] = Field(default=None, max_length=512)
+    chat_model: Optional[str] = Field(default=None, max_length=256)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class UserChatPreference(SQLModel, table=True):
+    """Per-user selected chat provider/model for assistant features."""
+
+    __tablename__ = "user_chat_preferences"
+
+    user_id: int = Field(primary_key=True, foreign_key="users.id")
+    provider: str = Field(max_length=32)
+    model: str = Field(max_length=256)
+    updated_at: datetime = Field(default_factory=utcnow)

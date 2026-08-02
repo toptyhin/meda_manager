@@ -316,3 +316,80 @@ class ImproveTemplateOut(BaseModel):
     is_default: bool
     default_text: str
     versions: list[ImproveTemplateVersionOut] = Field(default_factory=list)
+
+
+# --- Providers / model catalog ---
+class ProviderCapabilitiesOut(BaseModel):
+    chat: bool = False
+    image: bool = False
+    video: bool = False
+    catalog: bool = False
+
+
+class ProviderOut(BaseModel):
+    id: str
+    name: str
+    capabilities: ProviderCapabilitiesOut
+    configured: bool
+    is_default_chat: bool = False
+
+
+class ModelPricingOut(BaseModel):
+    prompt_per_1m: Optional[float] = None
+    completion_per_1m: Optional[float] = None
+    image: Optional[float] = None
+    request: Optional[float] = None
+    input_cache_read_per_1m: Optional[float] = None
+    unit: Optional[str] = None
+
+
+class ModelInfoOut(BaseModel):
+    id: str
+    provider: str
+    kind: str
+    context_length: Optional[int] = None
+    max_output_length: Optional[int] = None
+    input_modalities: list[str] = Field(default_factory=list)
+    output_modalities: list[str] = Field(default_factory=list)
+    pricing: Optional[ModelPricingOut] = None
+
+
+class ProviderModelsResponse(BaseModel):
+    provider: str
+    items: list[ModelInfoOut]
+    cached: bool = False
+    fetched_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+
+
+class ProviderSettingsOut(BaseModel):
+    id: str
+    name: str
+    enabled: bool
+    configured: bool
+    key_source: str  # db | env | none
+    api_key_masked: Optional[str] = None
+    base_url: str
+    chat_model: str
+    capabilities: ProviderCapabilitiesOut
+
+
+class ProviderSettingsUpdate(BaseModel):
+    api_key: Optional[str] = None
+    clear_api_key: bool = False
+    enabled: Optional[bool] = None
+    base_url: Optional[str] = None
+    clear_base_url: bool = False
+    chat_model: Optional[str] = None
+    clear_chat_model: bool = False
+
+
+class ChatModelPreferenceOut(BaseModel):
+    provider: str
+    model: str
+    source: str  # user | default
+
+
+class ChatModelPreferenceUpdate(BaseModel):
+    provider: str = Field(min_length=1, max_length=32)
+    model: str = Field(min_length=1, max_length=256)

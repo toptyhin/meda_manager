@@ -184,3 +184,64 @@ export type VideoGeneration = {
   created_at: string
   finished_at: string | null
 }
+
+export type ProviderCapabilities = {
+  chat: boolean
+  image: boolean
+  video: boolean
+  catalog: boolean
+}
+
+export type ProviderInfo = {
+  id: string
+  name: string
+  capabilities: ProviderCapabilities
+  configured: boolean
+  is_default_chat: boolean
+}
+
+export type ModelPricing = {
+  prompt_per_1m: number | null
+  completion_per_1m: number | null
+  image: number | null
+  request: number | null
+  input_cache_read_per_1m: number | null
+  unit: string | null
+}
+
+export type ModelInfo = {
+  id: string
+  provider: string
+  kind: string
+  context_length: number | null
+  max_output_length: number | null
+  input_modalities: string[]
+  output_modalities: string[]
+  pricing: ModelPricing | null
+}
+
+export type ProviderModelsResponse = {
+  provider: string
+  items: ModelInfo[]
+  cached: boolean
+  fetched_at: string | null
+  expires_at: string | null
+}
+
+export type ProviderSettings = {
+  id: string
+  name: string
+  enabled: boolean
+  configured: boolean
+  key_source: 'db' | 'env' | 'none' | string
+  api_key_masked: string | null
+  base_url: string
+  chat_model: string
+  capabilities: ProviderCapabilities
+}
+
+export type ChatModelPreference = {
+  provider: string
+  model: string
+  source: 'user' | 'default' | string
+}

@@ -12,7 +12,6 @@ from app.providers.agnes import (
     DEFAULT_IMPROVE_TEMPLATES,
     DESCRIBE_IMAGE_SYSTEM,
     EXTRACT_STYLE_SYSTEM,
-    AgnesProvider,
 )
 from app.providers.base import GenerationError
 from app.schemas import (
@@ -25,6 +24,7 @@ from app.schemas import (
     VisionPromptResponse,
 )
 from app.services import imaging
+from app.services.provider_runtime import get_chat_provider_for_user
 
 router = APIRouter()
 
@@ -157,7 +157,10 @@ async def improve_prompt(
 ) -> ImproveResponse:
     kind = _image_kind(body.mode)
     system = await _current_template(session, user.id, kind)  # type: ignore[arg-type]
-    provider = AgnesProvider(settings=get_settings())
+    try:
+        provider = await get_chat_provider_for_user(session, user=user)
+    except GenerationError as exc:
+        raise HTTPException(status_code=exc.status_code or 502, detail=exc.message) from exc
     try:
         improved = await provider.improve_prompt(
             body.text, body.category_name, kind=kind, system=system
@@ -177,7 +180,10 @@ async def improve_video_prompt(
 ) -> ImproveResponse:
     kind = _video_kind(body.mode)
     system = await _current_template(session, user.id, kind)  # type: ignore[arg-type]
-    provider = AgnesProvider(settings=get_settings())
+    try:
+        provider = await get_chat_provider_for_user(session, user=user)
+    except GenerationError as exc:
+        raise HTTPException(status_code=exc.status_code or 502, detail=exc.message) from exc
     try:
         improved = await provider.improve_prompt(
             body.text, body.category_name, kind=kind, system=system
@@ -204,7 +210,10 @@ async def _vision_prompt(
     if not path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File missing")
 
-    provider = AgnesProvider(settings=settings)
+    try:
+        provider = await get_chat_provider_for_user(session, user=user, settings=settings)
+    except GenerationError as exc:
+        raise HTTPException(status_code=exc.status_code or 502, detail=exc.message) from exc
     try:
         return await provider.vision_prompt(path.read_bytes(), system, instruction)
     except GenerationError as exc:

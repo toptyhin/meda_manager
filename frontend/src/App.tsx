@@ -5,8 +5,10 @@ import { GeneratePage } from './pages/GeneratePage'
 import { InvitesPage } from './pages/InvitesPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaPage } from './pages/MediaPage'
+import { ModelsPage } from './pages/ModelsPage'
 import { PromptsPage } from './pages/PromptsPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { SettingsPage } from './pages/SettingsPage'
 import { StylesPage } from './pages/StylesPage'
 import { VideoPage } from './pages/VideoPage'
 import type { ReactNode } from 'react'
@@ -41,6 +43,8 @@ export default function App() {
         <Route path="styles" element={<StylesPage />} />
         <Route path="generate" element={<GeneratePage />} />
         <Route path="video" element={<VideoPage />} />
+        <Route path="models" element={<ModelsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="invites" element={<InvitesPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

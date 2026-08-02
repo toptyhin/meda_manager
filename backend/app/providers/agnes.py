@@ -10,9 +10,12 @@ import httpx
 from app.config import Settings, get_settings
 from app.models import ImproveKind
 from app.providers.base import (
+    ChatProvider,
     GenerationError,
     ImageProvider,
     ImageReview,
+    ModelCatalog,
+    ModelInfo,
     VideoProvider,
     VideoTaskRef,
     VideoTaskResult,
@@ -279,11 +282,37 @@ def _extract_video_url(data: dict) -> Optional[str]:
     return None
 
 
-class AgnesProvider(ImageProvider, VideoProvider):
+class AgnesProvider(ImageProvider, VideoProvider, ChatProvider, ModelCatalog):
     def __init__(self, settings: Optional[Settings] = None, client: Optional[httpx.AsyncClient] = None):
         self.settings = settings or get_settings()
         self._client = client
         self._owns_client = client is None
+
+    async def list_models(self) -> list[ModelInfo]:
+        """Static catalog of models used by this integration."""
+        return [
+            ModelInfo(
+                id=CHAT_MODEL,
+                provider="agnes",
+                kind="chat",
+                input_modalities=["text", "image"],
+                output_modalities=["text"],
+            ),
+            ModelInfo(
+                id=IMAGE_MODEL,
+                provider="agnes",
+                kind="image",
+                input_modalities=["text", "image"],
+                output_modalities=["image"],
+            ),
+            ModelInfo(
+                id=self.settings.agnes_video_model,
+                provider="agnes",
+                kind="video",
+                input_modalities=["text", "image"],
+                output_modalities=["video"],
+            ),
+        ]
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:

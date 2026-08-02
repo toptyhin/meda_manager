@@ -147,6 +147,13 @@ export function Layout() {
         </div>
         <nav aria-label="Дополнительное меню" className="p-3 flex flex-col gap-1">
           <NavLink
+            to="/models"
+            className={sideLinkClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            Модели
+          </NavLink>
+          <NavLink
             to="/styles"
             className={sideLinkClass}
             onClick={() => setMenuOpen(false)}
@@ -160,6 +167,15 @@ export function Layout() {
           >
             Инвайты
           </NavLink>
+          {user?.is_admin && (
+            <NavLink
+              to="/settings"
+              className={sideLinkClass}
+              onClick={() => setMenuOpen(false)}
+            >
+              Настройки
+            </NavLink>
+          )}
         </nav>
       </dialog>
     </div>

@@ -1,6 +1,7 @@
 import { api } from './client'
 import type {
   Category,
+  ChatModelPreference,
   Generation,
   GenerationMode,
   ImageKind,
@@ -14,6 +15,9 @@ import type {
   Prompt,
   PromptMode,
   PromptVersion,
+  ProviderInfo,
+  ProviderModelsResponse,
+  ProviderSettings,
   StyleKind,
   StylePreset,
   User,
@@ -207,4 +211,43 @@ export const videosApi = {
   update: (id: number, body: { category_id?: number | null }) =>
     api<MediaVideo>(`/api/videos/${id}`, { method: 'PATCH', json: body }),
   remove: (id: number) => api<void>(`/api/videos/${id}`, { method: 'DELETE' }),
+}
+
+export const providersApi = {
+  list: () => api<ProviderInfo[]>('/api/providers'),
+  models: (providerId: string, params: { kind?: string; refresh?: boolean } = {}) => {
+    const sp = new URLSearchParams()
+    if (params.kind) sp.set('kind', params.kind)
+    if (params.refresh) sp.set('refresh', 'true')
+    const q = sp.toString()
+    return api<ProviderModelsResponse>(
+      `/api/providers/${providerId}/models${q ? `?${q}` : ''}`,
+    )
+  },
+  getChatModel: () => api<ChatModelPreference>('/api/providers/me/chat-model'),
+  setChatModel: (provider: string, model: string) =>
+    api<ChatModelPreference>('/api/providers/me/chat-model', {
+      method: 'PUT',
+      json: { provider, model },
+    }),
+}
+
+export const settingsApi = {
+  listProviders: () => api<ProviderSettings[]>('/api/settings/providers'),
+  updateProvider: (
+    providerId: string,
+    body: {
+      api_key?: string
+      clear_api_key?: boolean
+      enabled?: boolean
+      base_url?: string
+      clear_base_url?: boolean
+      chat_model?: string
+      clear_chat_model?: boolean
+    },
+  ) =>
+    api<ProviderSettings>(`/api/settings/providers/${providerId}`, {
+      method: 'PATCH',
+      json: body,
+    }),
 }

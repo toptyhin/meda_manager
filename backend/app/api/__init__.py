@@ -9,6 +9,8 @@ from app.api import (
     invites,
     media_ingress,
     prompts,
+    providers,
+    settings,
     styles,
     videos,
 )
@@ -29,3 +31,5 @@ api_router.include_router(
     media_ingress.router, prefix="/media-ingress", tags=["media-ingress"]
 )
 api_router.include_router(assistant.router, prefix="/assistant", tags=["assistant"])
+api_router.include_router(providers.router, prefix="/providers", tags=["providers"])
+api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
