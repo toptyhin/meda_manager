@@ -43,7 +43,7 @@ export function Layout() {
   }, [location.pathname])
 
   return (
-    <div className="min-h-full flex flex-col">
+    <div className="min-h-full flex flex-col safe-top">
       <main ref={mainRef} className={`flex-1 w-full max-w-lg mx-auto px-4 pt-4 ${TAB_BAR_HEIGHT}`}>
         <AnimatedOutlet />
       </main>

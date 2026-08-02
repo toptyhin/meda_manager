@@ -144,7 +144,7 @@ export function HomePage() {
             alt=""
             width={104}
             height={104}
-            className="hidden min-[380px]:block size-26 drop-shadow-xl anim-float"
+            className="size-26 drop-shadow-xl anim-float shrink-0"
             style={{ animationDelay: '0.8s' }}
           />
         </div>

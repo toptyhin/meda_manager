@@ -87,8 +87,22 @@ textarea {
   font: inherit;
 }
 
+:root {
+  --safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px));
+  --safe-bottom: max(
+    env(safe-area-inset-bottom, 0px),
+    var(--tg-safe-area-inset-bottom, 0px)
+  );
+  --content-safe-top: var(--tg-content-safe-area-inset-top, 0px);
+  --content-safe-bottom: var(--tg-content-safe-area-inset-bottom, 0px);
+}
+
+.safe-top {
+  padding-top: max(var(--content-safe-top), var(--safe-top));
+}
+
 .safe-bottom {
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  padding-bottom: calc(max(var(--safe-bottom), var(--content-safe-bottom)) + 0.5rem);
 }
 
 @keyframes float-y {
