@@ -1,0 +1,141 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-pink: var(--pink);
+  --color-muted: var(--muted);
+  --color-ok: var(--ok);
+  --color-bad: var(--bad);
+  --color-backdrop: var(--backdrop);
+  --color-grad-from: var(--grad-from);
+  --color-grad-via: var(--grad-via);
+  --color-grad-to: var(--grad-to);
+}
+
+:root {
+  --ink: #241a3d;
+  --paper: #f6f4fb;
+  --card: #ffffff;
+  --line: #e6dff2;
+  --accent: #7143b0;
+  --accent-hover: #5a3099;
+  --on-accent: #ffffff;
+  --accent-soft: #efe8fa;
+  --pink: #db4d9b;
+  --muted: #6f6688;
+  --ok: #2f8f5b;
+  --bad: #c0453e;
+  --backdrop: #0d0a1a;
+  --grad-from: #5a3099;
+  --grad-via: #8d4fd0;
+  --grad-to: #d94f9b;
+  color-scheme: light;
+}
+
+.dark {
+  --ink: #ece7f8;
+  --paper: #100c1d;
+  --card: #1c1531;
+  --line: #2f2650;
+  --accent: #9d5cdb;
+  --accent-hover: #b47ee8;
+  --on-accent: #241a3d;
+  --accent-soft: #2b2148;
+  --pink: #f076b4;
+  --muted: #9b91bb;
+  --ok: #4fae7c;
+  --bad: #e06a5f;
+  --backdrop: #05030a;
+  --grad-from: #492a74;
+  --grad-via: #7143b0;
+  --grad-to: #b23d86;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+}
+
+@keyframes float-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.anim-float {
+  animation: float-y 4s ease-in-out infinite;
+}
+
+.anim-fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+
+.skeleton {
+  background: linear-gradient(
+    100deg,
+    var(--line) 40%,
+    var(--card) 50%,
+    var(--line) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}

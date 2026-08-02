@@ -1,13 +1,18 @@
-# Production stack: Traefik v3.7 + Let's Encrypt (HTTP-01) + app
+# Production stack: Traefik v3.7 + Let's Encrypt (HTTP-01) + app + telegram mini app
 #
 # Prerequisites:
-#   - DNS A/AAAA for DOMAIN → this host
+#   - DNS A/AAAA for DOMAIN and t.DOMAIN → this host
 #   - ports 80 and 443 free and reachable
 #   - .env with DOMAIN, ACME_EMAIL, AGNES_API_KEY, JWT_SECRET
+#   - CORS_ORIGINS includes https://DOMAIN and https://t.DOMAIN
 #
 # Usage:
 #   docker compose -f docker-compose.prod.yml up -d --build
 #   docker compose -f docker-compose.prod.yml logs -f
+#
+# Hosts:
+#   https://$DOMAIN     — Media Manager SPA + API
+#   https://t.$DOMAIN   — Telegram Mini App (API proxied to app)
 
 services:
   traefik:
@@ -47,6 +52,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
     image: media-manager:latest
     env_file:
       - .env
@@ -77,13 +83,45 @@ services:
       - traefik.http.routers.media-manager.tls=true
       - traefik.http.routers.media-manager.tls.certresolver=letsencrypt
       - traefik.http.services.media-manager.loadbalancer.server.port=8000
-      # Security headers
+      # Security headers (main SPA — deny framing)
       - traefik.http.middlewares.media-manager-headers.headers.stsSeconds=31536000
       - traefik.http.middlewares.media-manager-headers.headers.stsIncludeSubdomains=true
       - traefik.http.middlewares.media-manager-headers.headers.contentTypeNosniff=true
       - traefik.http.middlewares.media-manager-headers.headers.frameDeny=true
       - traefik.http.middlewares.media-manager-headers.headers.referrerPolicy=strict-origin-when-cross-origin
       - traefik.http.routers.media-manager.middlewares=media-manager-headers
+
+  telegram:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: telegram-runtime
+    image: media-manager-telegram:latest
+    restart: unless-stopped
+    mem_limit: 32m
+    memswap_limit: 32m
+    expose:
+      - "80"
+    networks:
+      - proxy
+    depends_on:
+      - app
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=media_manager_proxy
+      # Host: t.<DOMAIN> — separate LE cert via same certresolver (HTTP-01)
+      - traefik.http.routers.telegram-app.rule=Host(`t.${DOMAIN:?set DOMAIN in .env}`)
+      - traefik.http.routers.telegram-app.entrypoints=websecure
+      - traefik.http.routers.telegram-app.tls=true
+      - traefik.http.routers.telegram-app.tls.certresolver=letsencrypt
+      - traefik.http.services.telegram-app.loadbalancer.server.port=80
+      # Telegram WebApp may run in iframe (web.telegram.org) — no frameDeny
+      - traefik.http.middlewares.telegram-app-headers.headers.stsSeconds=31536000
+      - traefik.http.middlewares.telegram-app-headers.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.telegram-app-headers.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.telegram-app-headers.headers.referrerPolicy=strict-origin-when-cross-origin
+      - traefik.http.middlewares.telegram-app-headers.headers.customresponseheaders.Content-Security-Policy=frame-ancestors https://web.telegram.org https://telegram.org 'self'
+      - traefik.http.routers.telegram-app.middlewares=telegram-app-headers
 
 networks:
   proxy:

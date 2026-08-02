@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: runtime
     image: media-manager:latest
     ports:
       - "${APP_PORT:-8080}:8000"

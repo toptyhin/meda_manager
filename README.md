@@ -71,15 +71,16 @@ docker compose down
 
 ### Production (Traefik + Let's Encrypt)
 
-Стек: **Traefik v3.7.8** (reverse proxy, HTTP→HTTPS) + приложение. Сертификат выпускается и обновляется автоматически через ACME HTTP-01 (Let's Encrypt).
+Стек: **Traefik v3.7.8** (reverse proxy, HTTP→HTTPS) + приложение + Telegram Mini App.  
+Сертификаты для `$DOMAIN` и `t.$DOMAIN` выпускаются и обновляются автоматически через ACME HTTP-01 (Let's Encrypt).
 
-1. DNS `A`/`AAAA` для `DOMAIN` указывает на сервер; порты **80** и **443** открыты.
+1. DNS `A`/`AAAA` для `DOMAIN` и `t.DOMAIN` указывает на сервер; порты **80** и **443** открыты.
 2. В `.env` задайте:
 
 ```bash
 DOMAIN=media.example.com
 ACME_EMAIL=admin@example.com
-CORS_ORIGINS=https://media.example.com
+CORS_ORIGINS=https://media.example.com,https://t.media.example.com
 PUBLIC_BASE_URL=https://media.example.com
 # AGNES_API_KEY, JWT_SECRET, …
 ```
@@ -93,9 +94,14 @@ docker compose -f docker-compose.prod.yml up -d --build
 docker compose -f docker-compose.prod.yml logs -f
 ```
 
-Приложение: `https://$DOMAIN`. Сертификаты хранятся в volume `letsencrypt`.  
+- Media Manager: `https://$DOMAIN`
+- Telegram Mini App: `https://t.$DOMAIN` (статика nginx, `/api` проксируется на backend)
+
+Сертификаты хранятся в volume `letsencrypt`.  
 Для тестовой выдачи без rate-limit LE задайте в `.env`:
 `ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory` (потом уберите и перевыпустите боевой сертификат).
+
+В BotFather укажите Web App URL: `https://t.$DOMAIN`.
 
 ```bash
 docker compose -f docker-compose.prod.yml down

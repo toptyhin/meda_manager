@@ -6,6 +6,20 @@ RUN yarn install --frozen-lockfile --network-timeout 120000
 COPY frontend/ ./
 RUN yarn build
 
+# --- telegram mini app build ---
+FROM node:22-alpine AS telegram
+WORKDIR /src
+COPY telegram-app/package.json telegram-app/package-lock.json ./
+RUN npm ci --fetch-timeout=120000
+COPY telegram-app/ ./
+RUN npm run build
+
+# --- telegram nginx runtime (served at t.${DOMAIN}) ---
+FROM nginx:1.27-alpine AS telegram-runtime
+COPY telegram-app/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=telegram /src/dist /usr/share/nginx/html
+EXPOSE 80
+
 # --- python deps (uv + slim) ---
 FROM python:3.12-slim-bookworm AS deps
 COPY --from=ghcr.io/astral-sh/uv:0.9.15 /uv /usr/local/bin/uv
