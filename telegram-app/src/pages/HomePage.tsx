@@ -91,7 +91,7 @@ export function HomePage() {
     <div className="flex flex-col gap-5">
       <header className="flex items-center gap-3 anim-fade-up">
         <img
-          src="/logo.png"
+          src="/logo2.webp"
           alt=""
           width={52}
           height={52}
@@ -140,7 +140,7 @@ export function HomePage() {
             </Link>
           </div>
           <img
-            src="/logo.png"
+            src="/logo2.webp"
             alt=""
             width={104}
             height={104}
