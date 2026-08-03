@@ -13,6 +13,8 @@ type Props = {
   canImprove: boolean
   improving: boolean
   onImprove: () => void
+  suggesting?: boolean
+  onSuggest?: () => void
   onShowTplSettings: () => void
   canDescribe?: boolean
   describing?: boolean
@@ -29,6 +31,8 @@ export function GenerateControls({
   canImprove,
   improving,
   onImprove,
+  suggesting = false,
+  onSuggest,
   onShowTplSettings,
   canDescribe = false,
   describing = false,
@@ -98,10 +102,21 @@ export function GenerateControls({
             {describing ? 'Описываем…' : 'Промпт из референса'}
           </button>
         )}
+        {onSuggest && (
+          <button
+            type="button"
+            disabled={suggesting || improving}
+            onClick={onSuggest}
+            title="Придумать новый промпт с нуля"
+            className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-line/40 disabled:opacity-50"
+          >
+            {suggesting ? 'Придумываем…' : 'Придумай промпт'}
+          </button>
+        )}
         <div className="inline-flex items-stretch gap-1">
           <button
             type="button"
-            disabled={!canImprove || improving}
+            disabled={!canImprove || improving || suggesting}
             onClick={onImprove}
             className="inline-flex items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-sm hover:bg-line/40 disabled:opacity-50"
           >

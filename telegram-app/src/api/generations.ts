@@ -19,6 +19,9 @@ export type GenerationCreateBody = {
   text: string
   size: string
   ratio: string
+  mode?: 'generate' | 'edit'
+  reference_image_ids?: number[]
+  parent_image_id?: number | null
 }
 
 // Дублируют ALLOWED_SIZES/ALLOWED_RATIOS из backend/app/api/generations.py

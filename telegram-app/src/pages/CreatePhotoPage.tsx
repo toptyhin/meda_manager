@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { assistantApi, type ImagePromptMode } from '../api/assistant'
 import { ApiError, fetchAuthedBlob } from '../api/client'
 import {
   generationsApi,
@@ -10,9 +11,12 @@ import {
   type ImageRatio,
   type ImageSize,
 } from '../api/generations'
+import { imagesApi } from '../api/images'
 import { limitsApi } from '../api/limits'
 import { AuthedImage } from '../components/AuthedImage'
 import { haptic, hapticNotify } from '../twa/telegram'
+
+type Step = 'pick' | 'form'
 
 const STATUS_TEXT: Record<Generation['status'], string> = {
   pending: 'В очереди…',
@@ -45,6 +49,26 @@ function IconSparkles() {
   )
 }
 
+function IconText() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M4 7V5h16v2" />
+      <path d="M12 5v14" />
+      <path d="M8 19h8" />
+    </svg>
+  )
+}
+
+function IconPhoto() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="3" />
+      <circle cx="9" cy="9" r="1.6" />
+      <path d="m21 15-4.2-4.2a1.5 1.5 0 0 0-2.1 0L6 19.5" />
+    </svg>
+  )
+}
+
 function IconDownload() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -54,11 +78,19 @@ function IconDownload() {
   )
 }
 
+function IconChevron() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m9 6 6 6-6 6" />
+    </svg>
+  )
+}
+
 function Spinner({ className = 'size-4' }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className={`inline-block rounded-full border-2 border-current border-t-transparent animate-spin ${className}`}
+      className={`inline-flex rounded-full border-2 border-current border-t-transparent animate-spin ${className}`}
     />
   )
 }
@@ -90,15 +122,35 @@ function Chip({
   )
 }
 
+function errMessage(e: unknown, fallback: string): string {
+  return e instanceof ApiError ? e.detail : fallback
+}
+
 export function CreatePhotoPage() {
   const qc = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [step, setStep] = useState<Step>('pick')
+  const [mode, setMode] = useState<ImagePromptMode>('t2i')
   const [prompt, setPrompt] = useState('')
   const [ratio, setRatio] = useState<ImageRatio>('1:1')
   const [size, setSize] = useState<ImageSize>('1K')
+  const [refImageId, setRefImageId] = useState<number | null>(null)
+  const [refPreviewUrl, setRefPreviewUrl] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const [improving, setImproving] = useState(false)
   const [jobId, setJobId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+
+  const hasPrompt = prompt.trim().length > 0
+  const canSubmit =
+    hasPrompt &&
+    !submitting &&
+    !uploading &&
+    (mode === 't2i' || refImageId !== null)
 
   const quotaQuery = useQuery({ queryKey: ['limits-me'], queryFn: limitsApi.me })
   const imageQuota =
@@ -126,26 +178,111 @@ export function CreatePhotoPage() {
     }
   }, [job?.status, qc])
 
+  useEffect(() => {
+    return () => {
+      if (refPreviewUrl) URL.revokeObjectURL(refPreviewUrl)
+    }
+  }, [refPreviewUrl])
+
+  function pickMode(next: ImagePromptMode) {
+    haptic('medium')
+    setMode(next)
+    setStep('form')
+    setFormError(null)
+    setJobId(null)
+  }
+
+  function goBack() {
+    haptic()
+    if (jobId !== null) {
+      setJobId(null)
+      setFormError(null)
+      return
+    }
+    if (step === 'form') {
+      setStep('pick')
+      setFormError(null)
+      return
+    }
+  }
+
+  async function onPickFile(file: File | undefined) {
+    if (!file) return
+    setUploading(true)
+    setFormError(null)
+    if (refPreviewUrl) URL.revokeObjectURL(refPreviewUrl)
+    setRefPreviewUrl(URL.createObjectURL(file))
+    try {
+      const img = await imagesApi.upload(file)
+      setRefImageId(img.id)
+      hapticNotify('success')
+    } catch (e) {
+      setRefImageId(null)
+      setFormError(errMessage(e, 'Не удалось загрузить фото'))
+      hapticNotify('error')
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function suggest() {
+    if (suggesting || improving) return
+    setSuggesting(true)
+    setFormError(null)
+    haptic()
+    try {
+      const { text } = await assistantApi.suggest(prompt.trim(), mode)
+      setPrompt(text)
+      hapticNotify('success')
+    } catch (e) {
+      setFormError(errMessage(e, 'Не удалось придумать промпт'))
+      hapticNotify('error')
+    } finally {
+      setSuggesting(false)
+    }
+  }
+
+  async function improve() {
+    if (!hasPrompt || suggesting || improving) return
+    setImproving(true)
+    setFormError(null)
+    haptic()
+    try {
+      const { improved_text } = await assistantApi.improve(prompt.trim(), mode)
+      setPrompt(improved_text)
+      hapticNotify('success')
+    } catch (e) {
+      setFormError(errMessage(e, 'Не удалось улучшить промпт'))
+      hapticNotify('error')
+    } finally {
+      setImproving(false)
+    }
+  }
+
   async function submit() {
-    const text = prompt.trim()
-    if (!text || submitting) return
+    if (!canSubmit) return
     setSubmitting(true)
     setFormError(null)
     haptic('medium')
     try {
-      const created = await generationsApi.create({ text, size, ratio })
+      const created = await generationsApi.create({
+        text: prompt.trim(),
+        size,
+        ratio,
+        mode: 'generate',
+        reference_image_ids: mode === 'i2i' && refImageId !== null ? [refImageId] : [],
+      })
       setJobId(created.id)
     } catch (e) {
-      setFormError(
-        e instanceof ApiError ? e.detail : 'Не удалось запустить генерацию. Попробуйте ещё раз.',
-      )
+      setFormError(errMessage(e, 'Не удалось запустить генерацию. Попробуйте ещё раз.'))
       hapticNotify('error')
     } finally {
       setSubmitting(false)
     }
   }
 
-  function reset() {
+  function resetForm() {
     haptic()
     setJobId(null)
     setFormError(null)
@@ -170,19 +307,39 @@ export function CreatePhotoPage() {
   }
 
   const aspectRatio = ratio.replace(':', ' / ')
+  const title =
+    step === 'pick'
+      ? 'Новое изображение'
+      : mode === 'i2i'
+        ? 'По моей фото'
+        : 'По тексту'
+
+  // На шаге выбора — на /create; на форме — к выбору режима (или к форме с джобой).
+  const showLinkBack = step === 'pick'
 
   return (
     <div className="flex flex-col gap-4 anim-fade-up">
       <header className="flex items-center gap-2">
-        <Link
-          to="/create"
-          onClick={() => haptic()}
-          aria-label="Назад"
-          className="inline-flex items-center justify-center size-9 rounded-xl border border-line bg-card text-muted active:scale-95 transition-transform"
-        >
-          <IconBack />
-        </Link>
-        <h1 className="flex-1 text-lg font-bold tracking-tight">Новое изображение</h1>
+        {showLinkBack ? (
+          <Link
+            to="/create"
+            onClick={() => haptic()}
+            aria-label="Назад"
+            className="inline-flex items-center justify-center size-9 rounded-xl border border-line bg-card text-muted active:scale-95 transition-transform"
+          >
+            <IconBack />
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={goBack}
+            aria-label="Назад"
+            className="inline-flex items-center justify-center size-9 rounded-xl border border-line bg-card text-muted active:scale-95 transition-transform"
+          >
+            <IconBack />
+          </button>
+        )}
+        <h1 className="flex-1 text-lg font-bold tracking-tight">{title}</h1>
         {imageQuota && imageQuota.remaining !== null && (
           <span className="rounded-full bg-accent-soft text-accent text-xs font-semibold px-2.5 py-1">
             Осталось: {imageQuota.remaining}
@@ -190,18 +347,159 @@ export function CreatePhotoPage() {
         )}
       </header>
 
-      {jobId === null ? (
+      {step === 'pick' && (
+        <div className="flex flex-col gap-2.5">
+          <p className="text-sm text-muted px-0.5">Как создаём изображение?</p>
+          <button
+            type="button"
+            onClick={() => pickMode('t2i')}
+            className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card p-4 text-left active:scale-[0.98] transition-transform"
+          >
+            <span className="inline-flex shrink-0 items-center justify-center size-12 rounded-xl bg-gradient-to-br from-grad-from via-grad-via to-grad-to text-white shadow-md">
+              <IconText />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-base font-semibold">Изображение по тексту</span>
+              <span className="block text-xs text-muted mt-0.5 leading-snug">
+                Опишите идею — модель нарисует с нуля
+              </span>
+            </span>
+            <span className="text-muted/60">
+              <IconChevron />
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => pickMode('i2i')}
+            className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card p-4 text-left active:scale-[0.98] transition-transform"
+          >
+            <span className="inline-flex shrink-0 items-center justify-center size-12 rounded-xl bg-accent-soft text-accent">
+              <IconPhoto />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-base font-semibold">Изображение по моей фото</span>
+              <span className="block text-xs text-muted mt-0.5 leading-snug">
+                Загрузите снимок и опишите, что изменить
+              </span>
+            </span>
+            <span className="text-muted/60">
+              <IconChevron />
+            </span>
+          </button>
+        </div>
+      )}
+
+      {step === 'form' && jobId === null && (
         <div className="flex flex-col gap-4">
+          {mode === 'i2i' && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold">Ваше фото</span>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => void onPickFile(e.target.files?.[0])}
+              />
+              {refPreviewUrl || refImageId !== null ? (
+                <div className="relative overflow-hidden rounded-2xl border border-line bg-card">
+                  {refPreviewUrl ? (
+                    <img src={refPreviewUrl} alt="" className="w-full max-h-56 object-cover" />
+                  ) : (
+                    <AuthedImage
+                      src={`/api/images/${refImageId}/file`}
+                      alt=""
+                      className="w-full max-h-56 object-cover"
+                    />
+                  )}
+                  <div className="absolute inset-x-0 bottom-0 flex gap-2 p-2 bg-gradient-to-t from-black/50 to-transparent">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic()
+                        fileInputRef.current?.click()
+                      }}
+                      disabled={uploading}
+                      className="rounded-xl bg-white/90 text-[#4a2a80] text-xs font-semibold px-3 py-1.5 disabled:opacity-50"
+                    >
+                      {uploading ? 'Загрузка…' : 'Заменить'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptic()
+                        if (refPreviewUrl) URL.revokeObjectURL(refPreviewUrl)
+                        setRefPreviewUrl(null)
+                        setRefImageId(null)
+                      }}
+                      disabled={uploading}
+                      className="rounded-xl bg-white/20 text-white text-xs font-semibold px-3 py-1.5 disabled:opacity-50"
+                    >
+                      Убрать
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptic()
+                    fileInputRef.current?.click()
+                  }}
+                  disabled={uploading}
+                  className="flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-line bg-card/60 px-4 py-8 text-sm text-muted active:scale-[0.99] transition disabled:opacity-50"
+                >
+                  {uploading ? (
+                    <>
+                      <Spinner className="size-5" />
+                      Загружаем…
+                    </>
+                  ) : (
+                    <>
+                      <IconPhoto />
+                      Выбрать фото из галереи
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+
           <label className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold">Описание</span>
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               rows={4}
-              placeholder="Например: рыжий кот в скафандре на фоне Марса, кинематографичный свет"
+              placeholder={
+                mode === 'i2i'
+                  ? 'Например: сделай вечерний свет, фон — городской закат, сохрани лицо'
+                  : 'Например: рыжий кот в скафандре на фоне Марса, кинематографичный свет'
+              }
               className="w-full resize-none rounded-2xl border border-line bg-card px-3.5 py-3 text-sm leading-relaxed placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent/50"
             />
           </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => void suggest()}
+              disabled={suggesting || improving}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2.5 text-sm font-semibold active:scale-[0.98] transition disabled:opacity-50"
+            >
+              {suggesting ? <Spinner /> : <IconSparkles />}
+              Придумай промпт
+            </button>
+            <button
+              type="button"
+              onClick={() => void improve()}
+              disabled={!hasPrompt || suggesting || improving}
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2.5 text-sm font-semibold active:scale-[0.98] transition disabled:opacity-40"
+            >
+              {improving ? <Spinner /> : null}
+              Улучшить промпт
+            </button>
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold">Соотношение сторон</span>
@@ -237,14 +535,16 @@ export function CreatePhotoPage() {
           <button
             type="button"
             onClick={() => void submit()}
-            disabled={!prompt.trim() || submitting}
+            disabled={!canSubmit}
             className="mt-1 flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-grad-from via-grad-via to-grad-to px-4 py-3.5 text-base font-semibold text-white shadow-lg active:scale-[0.98] transition disabled:opacity-50 disabled:active:scale-100"
           >
             {submitting ? <Spinner /> : <IconSparkles />}
             {submitting ? 'Запускаем…' : 'Сгенерировать'}
           </button>
         </div>
-      ) : (
+      )}
+
+      {step === 'form' && jobId !== null && (
         <div className="rounded-2xl border border-line bg-card p-3.5">
           <p className="text-xs text-muted leading-snug line-clamp-2 px-0.5">{prompt}</p>
 
@@ -277,7 +577,7 @@ export function CreatePhotoPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={reset}
+                  onClick={resetForm}
                   className="flex items-center justify-center gap-1.5 rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-white active:scale-[0.98] transition"
                 >
                   Ещё одно
@@ -296,7 +596,7 @@ export function CreatePhotoPage() {
               </div>
               <button
                 type="button"
-                onClick={reset}
+                onClick={resetForm}
                 className="mt-3 w-full rounded-xl bg-accent px-3 py-2.5 text-sm font-semibold text-white active:scale-[0.98] transition"
               >
                 Попробовать снова

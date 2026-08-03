@@ -1,5 +1,6 @@
 import { api } from './client'
 import type {
+  AppPromptTemplate,
   Category,
   ChatModelPreference,
   CreditKind,
@@ -166,6 +167,11 @@ export const assistantApi = {
       method: 'POST',
       json: { text, category_name, mode },
     }),
+  suggest: (hint: string, mode: PromptMode = 't2i') =>
+    api<{ text: string }>('/api/assistant/suggest', {
+      method: 'POST',
+      json: { hint, mode },
+    }),
   describeImage: (image_id: number) =>
     api<{ text: string }>('/api/assistant/describe-image', {
       method: 'POST',
@@ -257,6 +263,23 @@ export const settingsApi = {
   ) =>
     api<ProviderSettings>(`/api/settings/providers/${providerId}`, {
       method: 'PATCH',
+      json: body,
+    }),
+  getPromptTemplate: () => api<AppPromptTemplate>('/api/settings/prompt-template'),
+  updatePromptTemplate: (text: string) =>
+    api<AppPromptTemplate>('/api/settings/prompt-template', {
+      method: 'PUT',
+      json: { text },
+    }),
+  resetPromptTemplate: () =>
+    api<AppPromptTemplate>('/api/settings/prompt-template', { method: 'DELETE' }),
+  previewPromptTemplate: (body: {
+    text?: string | null
+    hint?: string
+    mode?: PromptMode
+  }) =>
+    api<{ text: string }>('/api/settings/prompt-template/preview', {
+      method: 'POST',
       json: body,
     }),
 }

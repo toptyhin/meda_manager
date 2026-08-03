@@ -240,6 +240,16 @@ export type ProviderSettings = {
   capabilities: ProviderCapabilities
 }
 
+/** Глобальный шаблон «Придумай промпт» (админ). */
+export type AppPromptTemplate = {
+  kind: string
+  text: string
+  version: number | null
+  is_default: boolean
+  default_text: string
+  updated_at: string | null
+}
+
 export type ChatModelPreference = {
   provider: string
   model: string

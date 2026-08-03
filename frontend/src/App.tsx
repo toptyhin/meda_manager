@@ -6,6 +6,7 @@ import { InvitesPage } from './pages/InvitesPage'
 import { LoginPage } from './pages/LoginPage'
 import { MediaPage } from './pages/MediaPage'
 import { ModelsPage } from './pages/ModelsPage'
+import { PromptGenPage } from './pages/PromptGenPage'
 import { PromptsPage } from './pages/PromptsPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="video" element={<VideoPage />} />
         <Route path="models" element={<ModelsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="prompt-gen" element={<PromptGenPage />} />
         <Route path="invites" element={<InvitesPage />} />
         <Route path="tariffs" element={<TariffsPage />} />
         <Route path="users" element={<UsersPage />} />

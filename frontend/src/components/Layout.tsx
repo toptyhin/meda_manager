@@ -184,6 +184,13 @@ export function Layout() {
                 Пользователи
               </NavLink>
               <NavLink
+                to="/prompt-gen"
+                className={sideLinkClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                Генератор промптов
+              </NavLink>
+              <NavLink
                 to="/settings"
                 className={sideLinkClass}
                 onClick={() => setMenuOpen(false)}

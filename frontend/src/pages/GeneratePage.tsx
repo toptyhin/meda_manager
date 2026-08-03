@@ -35,6 +35,7 @@ export function GeneratePage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [improving, setImproving] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
   const [describing, setDescribing] = useState(false)
   const [showTplSettings, setShowTplSettings] = useState(false)
 
@@ -97,6 +98,19 @@ export function GeneratePage() {
       setError(e instanceof ApiError ? e.detail : 'Не удалось улучшить промпт')
     } finally {
       setImproving(false)
+    }
+  }
+
+  async function suggest() {
+    setSuggesting(true)
+    setError(null)
+    try {
+      const { text: invented } = await assistantApi.suggest(text.trim(), imageMode)
+      setText(invented)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.detail : 'Не удалось придумать промпт')
+    } finally {
+      setSuggesting(false)
     }
   }
 
@@ -234,6 +248,8 @@ export function GeneratePage() {
             canImprove={Boolean(text)}
             improving={improving}
             onImprove={() => void improve()}
+            suggesting={suggesting}
+            onSuggest={() => void suggest()}
             onShowTplSettings={() => setShowTplSettings(true)}
             canDescribe={describeSourceId != null}
             describing={describing}
