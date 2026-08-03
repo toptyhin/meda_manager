@@ -6,8 +6,8 @@ Policies (kept deliberately simple to retune without schema changes):
 - Usage is counted from the generations/video_generations rows themselves
   (COUNT within the period window) — no separate counters, so usage can never
   diverge from reality. Atomicity comes from running the check in the same
-  transaction as the job insert; on Postgres the account row is additionally
-  locked with SELECT ... FOR UPDATE (silently omitted on SQLite).
+  transaction as the job insert; the account row is locked with
+  SELECT ... FOR UPDATE.
 - Consumption order: periodic quota first; once ANY quota row for the
   resource is exhausted, one generation costs max(credit_cost) of the
   violated rows from the credit balance. If the balance cannot cover it —
@@ -141,7 +141,7 @@ async def enforce(
         return
     now = now or utcnow()
 
-    # Row lock serializes concurrent requests on Postgres; SQLite ignores it.
+    # Row lock serializes concurrent requests for the same Telegram account.
     account = (
         await session.exec(
             select(TelegramAccount)

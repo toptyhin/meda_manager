@@ -20,10 +20,13 @@ from app.schemas import (
     ImproveTemplateOut,
     ImproveTemplateVersionCreate,
     ImproveTemplateVersionOut,
+    SuggestPromptRequest,
+    SuggestPromptResponse,
     VisionPromptRequest,
     VisionPromptResponse,
 )
 from app.services import imaging
+from app.services import prompt_gen
 from app.services.provider_runtime import get_chat_provider_for_user
 
 router = APIRouter()
@@ -170,6 +173,22 @@ async def improve_prompt(
     finally:
         await provider.aclose()
     return ImproveResponse(improved_text=improved)
+
+
+@router.post("/suggest", response_model=SuggestPromptResponse)
+async def suggest_prompt(
+    body: SuggestPromptRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> SuggestPromptResponse:
+    """«Придумай промпт»: invent a brand-new image prompt via the chat provider."""
+    try:
+        text = await prompt_gen.suggest_prompt(
+            session, user, hint=body.hint.strip(), mode=body.mode
+        )
+    except GenerationError as exc:
+        raise HTTPException(status_code=exc.status_code or 502, detail=exc.message) from exc
+    return SuggestPromptResponse(text=text)
 
 
 @router.post("/video-improve", response_model=ImproveResponse)

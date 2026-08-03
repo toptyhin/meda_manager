@@ -372,6 +372,20 @@ class OpenAICompatibleProvider(ChatProvider, ModelCatalog):
         content = await self._chat_text(payload, api_label="vision")
         return _clean_prompt_output(content)
 
+    async def suggest_prompt(self, user_text: str, system: str) -> str:
+        self._require_key()
+        payload = {
+            "model": self.config.default_model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_text},
+            ],
+            "temperature": 0.9,
+            "max_tokens": 1024,
+        }
+        content = await self._chat_text(payload)
+        return _clean_prompt_output(content)
+
     async def list_models(self) -> list[ModelInfo]:
         self._require_key()
         client = await self._get_client()

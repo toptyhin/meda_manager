@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useCurrentUser } from '../api/auth'
 import { limitsApi, type QuotaResource } from '../api/limits'
 import { useTelegramUser } from '../twa/telegram'
 
@@ -73,7 +74,24 @@ function QuotaCard() {
 
 export function ProfilePage() {
   const user = useTelegramUser()
-  const initials = (user?.first_name?.[0] ?? '?').toUpperCase()
+  // Dev-вход без Telegram: профиль веб-аккаунта из JWT
+  const me = useCurrentUser(user === null)
+  const devUser = user === null ? me.data : undefined
+  const displayName = user
+    ? `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}`
+    : (devUser?.username ?? 'Гость')
+  const initials = (user?.first_name?.[0] ?? devUser?.username?.[0] ?? '?').toUpperCase()
+  const metaRows: Array<[string, string]> = user
+    ? [
+        ['ID Telegram', String(user.id)],
+        ['Язык', user.language_code ?? '—'],
+        ['Premium', user.is_premium ? 'Да' : 'Нет'],
+      ]
+    : [
+        ['Логин', devUser?.username ?? '…'],
+        ['ID', devUser ? String(devUser.id) : '…'],
+        ['Права', devUser ? (devUser.is_admin ? 'Админ' : 'Пользователь') : '…'],
+      ]
 
   return (
     <div className="flex flex-col gap-5 anim-fade-up">
@@ -92,19 +110,14 @@ export function ProfilePage() {
           </div>
         )}
         <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight truncate">
-            {user ? `${user.first_name}${user.last_name ? ' ' + user.last_name : ''}` : 'Гость'}
-          </h1>
+          <h1 className="text-xl font-bold tracking-tight truncate">{displayName}</h1>
           {user?.username && <p className="text-sm text-muted">@{user.username}</p>}
+          {!user && devUser?.is_admin && <p className="text-sm text-muted">администратор</p>}
         </div>
       </div>
 
       <div className="rounded-2xl border border-line bg-card divide-y divide-line">
-        {[
-          ['ID Telegram', user ? String(user.id) : '—'],
-          ['Язык', user?.language_code ?? '—'],
-          ['Premium', user?.is_premium ? 'Да' : 'Нет'],
-        ].map(([label, value]) => (
+        {metaRows.map(([label, value]) => (
           <div key={label} className="flex items-center justify-between px-4 py-3 text-sm">
             <span className="text-muted">{label}</span>
             <span className="font-medium">{value}</span>

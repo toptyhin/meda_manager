@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useCurrentUser } from '../api/auth'
 import { haptic, telegramGreetingName, useTelegramUser } from '../twa/telegram'
 
 function IconSparkles() {
@@ -85,7 +86,9 @@ const quickActions = [
 
 export function HomePage() {
   const user = useTelegramUser()
-  const name = telegramGreetingName(user)
+  // Dev-вход без Telegram: приветствуем по логину веб-аккаунта
+  const me = useCurrentUser(user === null)
+  const name = telegramGreetingName(user, me.data?.username ?? 'друг')
 
   return (
     <div className="flex flex-col gap-5">

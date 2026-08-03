@@ -1,4 +1,4 @@
-"""Provider model catalog with SQLite TTL cache."""
+"""Provider model catalog with DB-backed TTL cache."""
 
 from __future__ import annotations
 
@@ -34,8 +34,6 @@ def _utcnow() -> datetime:
 
 
 def _as_utc(dt: datetime) -> datetime:
-    # Normalize to naive UTC; SQLite/fromisoformat reads may be aware or naive
-    # depending on how the row was written.
     if dt.tzinfo is None:
         return dt
     return dt.astimezone(timezone.utc).replace(tzinfo=None)

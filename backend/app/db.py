@@ -1,6 +1,5 @@
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -9,14 +8,9 @@ from app.config import get_settings
 
 settings = get_settings()
 
-_connect_args: dict = {}
-if settings.effective_database_url.startswith("sqlite"):
-    _connect_args = {"check_same_thread": False}
-
 engine = create_async_engine(
-    settings.effective_database_url,
+    settings.database_url,
     echo=False,
-    connect_args=_connect_args,
 )
 
 async_session_factory = async_sessionmaker(
@@ -26,61 +20,6 @@ async_session_factory = async_sessionmaker(
 )
 
 
-def _migrate(conn) -> None:
-    # create_all does not alter existing tables; add missing columns here.
-    # Legacy SQLite migrations only — a fresh Postgres gets the full schema
-    # from create_all, and the SQL below is SQLite dialect.
-    if conn.dialect.name != "sqlite":
-        return
-
-    invites_cols = {c["name"] for c in inspect(conn).get_columns("invites")}
-    if "is_blocked" not in invites_cols:
-        conn.execute(
-            text("ALTER TABLE invites ADD COLUMN is_blocked BOOLEAN NOT NULL DEFAULT 0")
-        )
-
-    prompts_cols = {c["name"] for c in inspect(conn).get_columns("prompts")}
-    if "mode" not in prompts_cols:
-        conn.execute(
-            text("ALTER TABLE prompts ADD COLUMN mode VARCHAR(4) NOT NULL DEFAULT 't2i'")
-        )
-
-    generations_cols = {c["name"] for c in inspect(conn).get_columns("generations")}
-    if "auto_review" not in generations_cols:
-        conn.execute(
-            text("ALTER TABLE generations ADD COLUMN auto_review BOOLEAN NOT NULL DEFAULT 0")
-        )
-    if "review_score" not in generations_cols:
-        conn.execute(text("ALTER TABLE generations ADD COLUMN review_score INTEGER"))
-    if "review_passed" not in generations_cols:
-        conn.execute(text("ALTER TABLE generations ADD COLUMN review_passed BOOLEAN"))
-
-    # ImproveKind was split per generation mode; re-tag existing template rows.
-    conn.execute(
-        text("UPDATE improve_prompt_versions SET kind = 'image_t2i' WHERE kind = 'image'")
-    )
-    conn.execute(
-        text("UPDATE improve_prompt_versions SET kind = 'video_t2v' WHERE kind = 'video'")
-    )
-
-    images_cols = {c["name"] for c in inspect(conn).get_columns("images")}
-    if "prompt_text" not in images_cols:
-        conn.execute(text("ALTER TABLE images ADD COLUMN prompt_text TEXT"))
-        conn.execute(
-            text(
-                """
-                UPDATE images
-                SET prompt_text = (
-                    SELECT json_extract(g.params, '$.text')
-                    FROM generations g
-                    WHERE g.result_image_id = images.id
-                )
-                WHERE images.kind = 'generated' AND images.prompt_text IS NULL
-                """
-            )
-        )
-
-
 async def init_db() -> None:
     settings.data_dir.mkdir(parents=True, exist_ok=True)
     settings.images_dir.mkdir(parents=True, exist_ok=True)
@@ -88,7 +27,6 @@ async def init_db() -> None:
     settings.videos_dir.mkdir(parents=True, exist_ok=True)
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
-        await conn.run_sync(_migrate)
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:

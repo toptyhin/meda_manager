@@ -2,6 +2,8 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { HomePage } from './pages/HomePage'
 import { CreatePage } from './pages/CreatePage'
+import { CreatePhotoPage } from './pages/CreatePhotoPage'
+import { DevLoginPage } from './pages/DevLoginPage'
 import { MediaLibraryPage } from './pages/MediaLibraryPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { useTelegramAuth } from './twa/auth'
@@ -15,7 +17,7 @@ function Splash({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { state, error, retry } = useTelegramAuth()
+  const { state, error, retry, devLogin } = useTelegramAuth()
 
   if (state === 'loading') {
     return (
@@ -24,6 +26,10 @@ export default function App() {
         <p className="text-sm text-muted">Входим…</p>
       </Splash>
     )
+  }
+
+  if (state === 'dev-login') {
+    return <DevLoginPage error={error} onSubmit={devLogin} />
   }
 
   if (state === 'no-telegram') {
@@ -58,6 +64,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="create" element={<CreatePage />} />
+        <Route path="create/photo" element={<CreatePhotoPage />} />
         <Route path="media" element={<MediaLibraryPage />} />
         <Route path="profile" element={<ProfilePage />} />
       </Route>

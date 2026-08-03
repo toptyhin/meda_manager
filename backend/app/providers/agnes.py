@@ -488,6 +488,21 @@ class AgnesProvider(ImageProvider, VideoProvider, ChatProvider, ModelCatalog):
         content = await self._chat_text(payload, api_label="vision")
         return _clean_prompt_output(content)
 
+    async def suggest_prompt(self, user_text: str, system: str) -> str:
+        if not self.settings.agnes_api_key:
+            raise GenerationError("AGNES_API_KEY is not configured")
+        payload = {
+            "model": CHAT_MODEL,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user_text},
+            ],
+            "temperature": 0.9,
+            "max_tokens": 1024,
+        }
+        content = await self._chat_text(payload)
+        return _clean_prompt_output(content)
+
     async def review_image(self, prompt: str, image_url: str) -> ImageReview:
         if not self.settings.agnes_api_key:
             raise GenerationError("AGNES_API_KEY is not configured")

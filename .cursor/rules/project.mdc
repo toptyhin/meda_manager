@@ -1,0 +1,56 @@
+---
+description: Инварианты и правила Media Manager — стек, БД, провайдеры LLM, джобы, лимиты, деплой
+alwaysApply: true
+---
+
+# Правила проекта Media Manager
+
+Медиа-менеджер для работы с **любыми ИИ-моделями** (генерация изображений/видео, чат-ассистенты): FastAPI + Postgres backend, React SPA, Telegram Mini App. Agnes AI — первый подключённый провайдер (первый этап), архитектура провайдер-агностична. Полные описания — в README.md, структура — в ARCHITECTURE.md.
+
+## Критические инварианты
+
+### База данных
+
+- **Runtime — только Postgres** через asyncpg. SQLite не поддерживается: `Settings._require_postgres` отклоняет не-postgres `DATABASE_URL` при старте. aiosqlite оставлен только для разового скрипта миграции.
+- **Миграций нет** (Alembic не используется): схема создаётся через `SQLModel.metadata.create_all` в `init_db()`. Новые колонки/таблицы добавляются правкой `app/models.py`; для существующих БД изменения схемы требуют ручного SQL.
+- **Naive UTC**: все `DateTime` — `TIMESTAMP WITHOUT TIME ZONE`, asyncpg отвергает tz-aware значения. Использовать `utcnow()` из `app/models.py`, не `datetime.now(timezone.utc)`.
+- **Тесты**: pytest дропает и пересоздаёт все таблицы — только против БД, чьё имя содержит `test` (см. `tests/conftest.py`). Никогда не направлять тесты на боевую БД.
+
+### Провайдеры LLM
+
+- Целевая модель — **любые ИИ-провайдеры** для медиа и чата. Agnes — первый этап (image `agnes-image-2.1-flash`, video `agnes-video-v2.0`); чат/улучшение промптов уже мульти-провайдерно: `agnes`, `atlas`, `crazyrouter`, `nordrouter` (OpenAI-совместимые).
+- Все обращения к моделям — только через интерфейсы `app/providers/base.py` (Chat/Image/VideoProvider). Новый провайдер = реализация интерфейса + запись в lazy-реестре `app/providers/registry.py` (`module.path:ClassName`); без прямых импортов в API-слое и без хардкода Agnes-специфики вне `app/providers/agnes.py`.
+- Все внешние вызовы — через `httpx` из `app/providers/*`; в тестах мокать `respx`, не реальными запросами.
+
+### Фоновые джобы
+
+- Генерации — **in-process asyncio tasks** (`asyncio.create_task` в `api/generations.py`, `api/videos.py`); нет Redis/очередей. Клиент поллит `GET /api/generations/{id}` / `/api/video-generations/{id}`.
+- При старте `reap_stale_jobs()` / `reap_stale_video_jobs()` помечают зависшие pending/running джобы как `error: interrupted` — джобы не переживают рестарт.
+- **Auto-review пайплайн** (`auto_review: true`): генерация → vision-ревю (`agnes-2.5-flash`, score 0–10) → i2i-правка или регенерация. Лимиты: `AUTO_REVIEW_MAX_FIXES` (дефолт 2), `AUTO_REVIEW_PASS_SCORE` (дефолт 7). При сбое ревью — **fail-open** (картинка принимается как есть). Промежуточные кадры — `ImageKind.draft`, в медиа-гриде не показываются.
+
+### Аутентификация и доступ
+
+- Регистрация закрытая, по инвайт-коду; первый пользователь — admin. Bootstrap-инвайт печатается в лог при старте (или `BOOTSTRAP_INVITE`).
+- JWT (`JWT_SECRET`, TTL `JWT_EXPIRE_HOURS`=72ч); пароли — argon2 (pwdlib).
+- Telegram Mini App: auth через HMAC-валидацию initData (`TELEGRAM_BOT_TOKEN`); пустой токен = `/api/auth/telegram` выключен.
+- `/api/media-ingress/{id}` — публичные HMAC-ссылки на изображения для Agnes (i2v/keyframes/auto-review); требуется публично доступный `PUBLIC_BASE_URL`. TTL — `MEDIA_LINK_TTL`.
+
+### Тарифы и лимиты
+
+- Лимиты/кредиты enforced через `app/services/limits.py::enforce` (тарифные планы, периоды, баланс по telegram_id). Новые платные операции должны проходить через `enforce`, а не проверки ad-hoc.
+
+### Frontend — PoC, цель: админка
+
+- `frontend/` — **proof of concept**, который должен перерасти в **админку проекта** (пользователи, тарифы, провайдеры, контент). Новый UI-функционал проектировать под сценарии администрирования, а не mass-user UX. Пользовательский клиент — `telegram-app/`.
+
+### Ресурсы и деплой
+
+- Один процесс uvicorn; лимиты памяти: app 512m (local compose) / 180m (prod), postgres 256m, traefik 64m, telegram-nginx 32m. Не добавлять тяжёлые зависимости без проверки бюджета RAM.
+- SPA отдаёт сам FastAPI из `frontend/dist`: пути с расширением файла — 404, не маскировать index.html (защита от сканеров `/.env`).
+- Prod: Traefik v3.7 + Let's Encrypt HTTP-01; `$DOMAIN` — SPA+API, `t.$DOMAIN` — Telegram Mini App (nginx-статика, `/api` проксируется на backend). Для telegram роутера нет `frameDeny` (WebApp в iframe), есть CSP `frame-ancestors`.
+
+### Инструменты
+
+- Пакетные менеджеры: backend — **uv** (`uv sync`, `uv run`), frontend — **yarn**, telegram-app — **npm**. Не смешивать lock-файлы.
+- Python ≥3.12; React 19 + Vite + Tailwind v4; линт фронтенда — oxlint.
+- Тесты: `cd backend && uv run pytest`; фронтенд: `yarn lint`, `yarn build`.

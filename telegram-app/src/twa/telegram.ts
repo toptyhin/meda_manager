@@ -31,6 +31,14 @@ export function haptic(style: 'light' | 'medium' | 'heavy' = 'light') {
   }
 }
 
+export function hapticNotify(type: 'error' | 'success' | 'warning') {
+  try {
+    getWebApp()?.HapticFeedback?.notificationOccurred(type)
+  } catch {
+    /* ignore */
+  }
+}
+
 export function useTelegramUser(): TgUser | null {
   const [user] = useState<TgUser | null>(() => getWebApp()?.initDataUnsafe?.user ?? null)
   return user

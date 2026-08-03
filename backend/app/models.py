@@ -7,9 +7,8 @@ from sqlmodel import Field, SQLModel
 
 
 def utcnow() -> datetime:
-    # Naive UTC: SQLAlchemy DateTime columns are TIMESTAMP WITHOUT TIME ZONE on
-    # Postgres, and asyncpg rejects tz-aware values for them; SQLite drops tz
-    # on write anyway, so reads are naive on both backends.
+    # Naive UTC: SQLAlchemy DateTime columns are TIMESTAMP WITHOUT TIME ZONE,
+    # and asyncpg rejects tz-aware values for them.
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
@@ -59,6 +58,12 @@ class StyleKind(str, Enum):
     image = "image"
     video = "video"
     both = "both"
+
+
+class AppPromptKind(str, Enum):
+    """Admin-managed global prompt templates (not per-user like ImprovePromptVersion)."""
+
+    prompt_gen = "prompt_gen"
 
 
 class LimitResourceKind(str, Enum):
@@ -261,6 +266,23 @@ class ImprovePromptVersion(SQLModel, table=True):
     kind: ImproveKind
     version: int
     text: str = Field(sa_column=Column(Text, nullable=False))
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class AppPromptTemplate(SQLModel, table=True):
+    """Versioned global prompt template (e.g. for the «Придумай промпт» assistant).
+
+    Current text = latest version; fall back to code default when no versions exist.
+    """
+
+    __tablename__ = "app_prompt_templates"
+    __table_args__ = (UniqueConstraint("kind", "version", name="uq_app_prompt_template"),)
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    kind: AppPromptKind = Field(index=True)
+    version: int
+    text: str = Field(sa_column=Column(Text, nullable=False))
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.id")
     created_at: datetime = Field(default_factory=utcnow)
 
 

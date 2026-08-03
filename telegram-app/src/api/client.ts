@@ -100,6 +100,15 @@ export async function api<T>(
   return res.json() as Promise<T>
 }
 
+export async function fetchAuthedBlob(url: string): Promise<Blob> {
+  const token = getToken()
+  const res = await fetch(url, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw await parseError(res)
+  return res.blob()
+}
+
 /** Exchange Mini App initData for a JWT; creates the account on first login. */
 export async function loginWithTelegram(): Promise<void> {
   const initData = getWebApp()?.initData
@@ -108,6 +117,18 @@ export async function loginWithTelegram(): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ init_data: initData }),
+  })
+  if (!res.ok) throw await parseError(res)
+  const data = (await res.json()) as { access_token: string }
+  setToken(data.access_token)
+}
+
+/** Dev-вход без Telegram: логин/пароль веб-аккаунта → тот же JWT. */
+export async function loginWithPassword(username: string, password: string): Promise<void> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
   })
   if (!res.ok) throw await parseError(res)
   const data = (await res.json()) as { access_token: string }

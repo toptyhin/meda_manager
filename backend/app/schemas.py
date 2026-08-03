@@ -325,6 +325,36 @@ class ImproveTemplateOut(BaseModel):
     versions: list[ImproveTemplateVersionOut] = Field(default_factory=list)
 
 
+class SuggestPromptRequest(BaseModel):
+    # Optional user hint/theme; empty = invent from scratch.
+    hint: str = Field(default="", max_length=2000)
+    mode: str = Field(default="t2i", pattern="^(t2i|i2i)$")
+
+
+class SuggestPromptResponse(BaseModel):
+    text: str
+
+
+class AppPromptTemplateOut(BaseModel):
+    kind: str
+    text: str
+    version: Optional[int] = None
+    is_default: bool
+    default_text: str
+    updated_at: Optional[datetime] = None
+
+
+class AppPromptTemplateUpdate(BaseModel):
+    text: str = Field(min_length=1)
+
+
+class PromptGenPreviewRequest(BaseModel):
+    # Admin playground: None = current stored template.
+    text: Optional[str] = None
+    hint: str = Field(default="", max_length=2000)
+    mode: str = Field(default="t2i", pattern="^(t2i|i2i)$")
+
+
 # --- Providers / model catalog ---
 class ProviderCapabilitiesOut(BaseModel):
     chat: bool = False

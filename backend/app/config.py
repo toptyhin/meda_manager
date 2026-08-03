@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Project root: media_manager/
@@ -43,8 +44,8 @@ class Settings(BaseSettings):
     telegram_init_data_max_age: int = 86400
     data_dir: Path = ROOT_DIR / "data"
     frontend_dist: Path = ROOT_DIR / "frontend" / "dist"
-    # Empty means local SQLite under data_dir; set to postgresql+asyncpg://... for Postgres.
-    database_url: str = ""
+    # Required: postgresql+asyncpg://...  SQLite is not supported at runtime.
+    database_url: str
     bootstrap_invite: str = ""
     cors_origins: str = "http://localhost:5173"
     public_base_url: str = ""
@@ -55,12 +56,17 @@ class Settings(BaseSettings):
     video_poll_timeout: int = 900
     media_link_ttl: int = 3600
 
-
-    @property
-    def effective_database_url(self) -> str:
-        if self.database_url:
-            return self.database_url
-        return f"sqlite+aiosqlite:///{self.data_dir / 'app.db'}"
+    @field_validator("database_url")
+    @classmethod
+    def _require_postgres(cls, value: str) -> str:
+        url = value.strip()
+        if not url:
+            raise ValueError("DATABASE_URL is required")
+        if not url.startswith("postgresql"):
+            raise ValueError(
+                "DATABASE_URL must be a postgresql(+asyncpg):// URL; SQLite is not supported"
+            )
+        return url
 
     @property
     def images_dir(self) -> Path:

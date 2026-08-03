@@ -150,6 +150,18 @@ class ChatProvider(ABC):
         """Improve / structure a prompt using a chat/LLM model."""
 
     @abstractmethod
+    async def suggest_prompt(
+        self,
+        user_text: str,
+        system: str,
+    ) -> str:
+        """Invent a brand-new generation prompt from scratch (or from a short hint).
+
+        Unlike improve_prompt, there is no draft to rewrite: ``system`` is the
+        admin-managed prompt-generation template, ``user_text`` an optional hint.
+        """
+
+    @abstractmethod
     async def vision_prompt(
         self,
         image: bytes,

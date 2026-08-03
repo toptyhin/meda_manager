@@ -36,8 +36,13 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-media}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-media-local-dev}
       POSTGRES_DB: ${POSTGRES_DB:-media_manager}
+    ports:
+      # Host access for local pytest / tools (prod compose does not publish this).
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
+      # Creates media_manager_test on first volume init (for pytest).
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     mem_limit: 256m
     memswap_limit: 256m

@@ -166,18 +166,21 @@ async def migrate(sqlite_path: str, pg_url: str, force: bool) -> int:
 
 
 def main() -> int:
-    from app.config import get_settings  # noqa: PLC0415
-
-    settings = get_settings()
+    # Avoid importing app.config.Settings here: runtime Settings requires
+    # DATABASE_URL, but this one-off script may be invoked with --pg/--sqlite
+    # only. Defaults come from the environment (compose injects DATABASE_URL).
+    default_sqlite = os.environ.get("SQLITE_PATH") or str(
+        Path(os.environ.get("DATA_DIR", "/data")) / "app.db"
+    )
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--sqlite",
-        default=os.environ.get("SQLITE_PATH", str(settings.data_dir / "app.db")),
+        default=default_sqlite,
         help="Path to the SQLite database file",
     )
     parser.add_argument(
         "--pg",
-        default=settings.database_url,
+        default=os.environ.get("DATABASE_URL", ""),
         help="PostgreSQL async URL (or $DATABASE_URL)",
     )
     parser.add_argument(
