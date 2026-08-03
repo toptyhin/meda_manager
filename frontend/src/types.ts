@@ -245,3 +245,114 @@ export type ChatModelPreference = {
   model: string
   source: 'user' | 'default' | string
 }
+
+// --- Tariffs & limits ---
+
+export type LimitResourceKind = 'image' | 'video'
+export type LimitPeriod = 'daily' | 'weekly' | 'monthly' | 'total'
+export type CreditKind = 'paid' | 'bonus' | 'adjustment' | 'consume'
+
+export type TariffLimit = {
+  id: number
+  resource_kind: LimitResourceKind
+  period: LimitPeriod
+  max_count: number | null
+  credit_cost: number
+}
+
+export type TariffLimitDraft = {
+  resource_kind: LimitResourceKind
+  period: LimitPeriod
+  max_count: number | null
+  credit_cost: number
+}
+
+export type TariffPlan = {
+  id: number
+  name: string
+  description: string | null
+  is_default: boolean
+  is_active: boolean
+  created_at: string
+  updated_at: string
+  limits: TariffLimit[]
+}
+
+export type TariffPlanPayload = {
+  name: string
+  description?: string | null
+  is_default?: boolean
+  is_active?: boolean
+  limits?: TariffLimitDraft[]
+}
+
+export type QuotaPlan = {
+  id: number
+  name: string
+  expires_at: string | null
+}
+
+export type QuotaResource = {
+  resource_kind: LimitResourceKind
+  period: LimitPeriod
+  limit: number | null
+  used: number
+  remaining: number | null
+  reset_at: string | null
+  credit_cost: number
+}
+
+export type QuotaSnapshot = {
+  plan: QuotaPlan | null
+  resources: QuotaResource[]
+  credits: number
+  enforcement_enabled: boolean
+}
+
+export type Subscription = {
+  id: number
+  plan_id: number
+  plan_name: string
+  created_by: number | null
+  expires_at: string | null
+  created_at: string
+  active: boolean
+}
+
+export type CreditTransaction = {
+  id: number
+  amount: number
+  kind: CreditKind
+  reason: string | null
+  source: string
+  created_by: number | null
+  created_at: string
+}
+
+export type TgUserListItem = {
+  telegram_id: number
+  username: string | null
+  first_name: string
+  last_name: string | null
+  photo_url: string | null
+  is_premium: boolean
+  is_blocked: boolean
+  linked_user_id: number | null
+  plan: QuotaPlan | null
+  balance: number
+  used_today: number
+  used_month: number
+  first_seen_at: string
+  last_seen_at: string
+}
+
+export type TgUserListResponse = {
+  items: TgUserListItem[]
+  total: number
+}
+
+export type TgUserDetail = TgUserListItem & {
+  subscriptions: Subscription[]
+  transactions: CreditTransaction[]
+  quota: QuotaSnapshot | null
+}

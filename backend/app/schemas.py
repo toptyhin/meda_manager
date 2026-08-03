@@ -1,13 +1,16 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models import (
+    CreditKind,
     GenerationMode,
     GenerationStatus,
     ImageKind,
     ImproveKind,
+    LimitPeriod,
+    LimitResourceKind,
     PromptMode,
     PromptSource,
     StyleKind,
@@ -25,6 +28,10 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class TelegramAuthRequest(BaseModel):
+    init_data: str = Field(min_length=1, max_length=8192)
 
 
 class TokenResponse(BaseModel):
@@ -393,3 +400,152 @@ class ChatModelPreferenceOut(BaseModel):
 class ChatModelPreferenceUpdate(BaseModel):
     provider: str = Field(min_length=1, max_length=32)
     model: str = Field(min_length=1, max_length=256)
+
+
+# --- Tariffs & limits ---
+
+
+class TariffLimitIn(BaseModel):
+    resource_kind: LimitResourceKind
+    period: LimitPeriod
+    max_count: Optional[int] = Field(default=None, ge=0)
+    credit_cost: int = Field(default=1, ge=1)
+
+
+class TariffLimitOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    resource_kind: LimitResourceKind
+    period: LimitPeriod
+    max_count: Optional[int]
+    credit_cost: int
+
+
+class TariffPlanIn(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    description: Optional[str] = None
+    is_default: bool = False
+    is_active: bool = True
+    limits: list[TariffLimitIn] = Field(default_factory=list)
+
+
+class TariffPlanUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    description: Optional[str] = None
+    clear_description: bool = False
+    is_default: Optional[bool] = None
+    is_active: Optional[bool] = None
+    limits: Optional[list[TariffLimitIn]] = None
+
+
+class TariffPlanOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: Optional[str]
+    is_default: bool
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    limits: list[TariffLimitOut] = Field(default_factory=list)
+
+
+class SubscriptionIn(BaseModel):
+    plan_id: int
+    expires_at: Optional[datetime] = None
+
+    @field_validator("expires_at", mode="after")
+    @classmethod
+    def _naive_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        # DB columns are TIMESTAMP WITHOUT TIME ZONE (naive UTC); clients send
+        # ISO strings with offsets — normalize here, see models.utcnow.
+        if value is not None and value.tzinfo is not None:
+            return value.astimezone(timezone.utc).replace(tzinfo=None)
+        return value
+
+
+class SubscriptionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    plan_id: int
+    plan_name: str = ""
+    created_by: Optional[int]
+    expires_at: Optional[datetime]
+    created_at: datetime
+    active: bool = True
+
+
+class CreditIn(BaseModel):
+    amount: int  # non-zero validated in the endpoint
+    kind: CreditKind = CreditKind.paid
+    reason: Optional[str] = Field(default=None, max_length=512)
+
+
+class CreditTransactionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    amount: int
+    kind: CreditKind
+    reason: Optional[str]
+    source: str
+    created_by: Optional[int]
+    created_at: datetime
+
+
+class QuotaResourceOut(BaseModel):
+    resource_kind: LimitResourceKind
+    period: LimitPeriod
+    limit: Optional[int]  # None = unlimited
+    used: int
+    remaining: Optional[int]  # None = unlimited
+    reset_at: Optional[datetime]  # None for total period
+    credit_cost: int
+
+
+class QuotaPlanOut(BaseModel):
+    id: int
+    name: str
+    expires_at: Optional[datetime] = None
+
+
+class QuotaSnapshot(BaseModel):
+    plan: Optional[QuotaPlanOut]
+    resources: list[QuotaResourceOut] = Field(default_factory=list)
+    credits: int = 0
+    enforcement_enabled: bool = False
+
+
+class TgUserListItem(BaseModel):
+    telegram_id: int
+    username: Optional[str]
+    first_name: str
+    last_name: Optional[str]
+    photo_url: Optional[str]
+    is_premium: bool
+    is_blocked: bool
+    linked_user_id: Optional[int]
+    plan: Optional[QuotaPlanOut] = None
+    balance: int = 0
+    used_today: int = 0
+    used_month: int = 0
+    first_seen_at: datetime
+    last_seen_at: datetime
+
+
+class TgUserListResponse(BaseModel):
+    items: list[TgUserListItem]
+    total: int
+
+
+class TgUserDetail(TgUserListItem):
+    subscriptions: list[SubscriptionOut] = Field(default_factory=list)
+    transactions: list[CreditTransactionOut] = Field(default_factory=list)
+    quota: Optional[QuotaSnapshot] = None
+
+
+class TgUserUpdate(BaseModel):
+    is_blocked: bool

@@ -12,7 +12,15 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from app.auth import get_current_user
 from app.config import get_settings
 from app.db import get_session
-from app.models import Category, Image, User, Video, VideoGeneration, VideoMode
+from app.models import (
+    Category,
+    Image,
+    LimitResourceKind,
+    User,
+    Video,
+    VideoGeneration,
+    VideoMode,
+)
 from app.schemas import (
     VideoGenerationCreate,
     VideoGenerationOut,
@@ -20,6 +28,7 @@ from app.schemas import (
     VideoOut,
     VideoUpdate,
 )
+from app.services import limits as limits_service
 from app.services import video as video_service
 from app.services.jobs import run_video_generation
 
@@ -160,6 +169,8 @@ async def create_video_generation(
         cat = await session.get(Category, body.category_id)
         if cat is None or cat.user_id != user.id:
             raise HTTPException(status_code=400, detail="Invalid category_id")
+
+    await limits_service.enforce(session, user, LimitResourceKind.video)
 
     seed = body.seed
     if seed is None:

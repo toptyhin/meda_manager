@@ -60,6 +60,10 @@ services:
       DATA_DIR: /data
       FRONTEND_DIST: /app/frontend/dist
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-media}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-media_manager}
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - mm-data:/data
     restart: unless-stopped
@@ -123,6 +127,26 @@ services:
       - traefik.http.middlewares.telegram-app-headers.headers.customresponseheaders.Content-Security-Policy=frame-ancestors https://web.telegram.org https://telegram.org 'self'
       - traefik.http.routers.telegram-app.middlewares=telegram-app-headers
 
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-media}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-media_manager}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    mem_limit: 256m
+    memswap_limit: 256m
+    networks:
+      - proxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 networks:
   proxy:
     name: media_manager_proxy
@@ -130,3 +154,4 @@ networks:
 volumes:
   mm-data:
   letsencrypt:
+  pg-data:

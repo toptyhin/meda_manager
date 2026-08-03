@@ -1,12 +1,14 @@
 from fastapi import APIRouter
 
 from app.api import (
+    admin,
     assistant,
     auth,
     categories,
     generations,
     images,
     invites,
+    limits,
     media_ingress,
     prompts,
     providers,
@@ -33,3 +35,6 @@ api_router.include_router(
 api_router.include_router(assistant.router, prefix="/assistant", tags=["assistant"])
 api_router.include_router(providers.router, prefix="/providers", tags=["providers"])
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
+api_router.include_router(limits.router, prefix="/limits", tags=["limits"])
+api_router.include_router(admin.tariffs_router, prefix="/admin/tariffs", tags=["admin-tariffs"])
+api_router.include_router(admin.tg_users_router, prefix="/admin/tg-users", tags=["admin-tg-users"])

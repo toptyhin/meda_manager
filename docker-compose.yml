@@ -13,6 +13,10 @@ services:
       DATA_DIR: /data
       FRONTEND_DIST: /app/frontend/dist
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-media}:${POSTGRES_PASSWORD:-media-local-dev}@postgres:5432/${POSTGRES_DB:-media_manager}
+    depends_on:
+      postgres:
+        condition: service_healthy
     volumes:
       - mm-data:/data
     restart: unless-stopped
@@ -26,5 +30,24 @@ services:
       retries: 3
       start_period: 15s
 
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-media}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-media-local-dev}
+      POSTGRES_DB: ${POSTGRES_DB:-media_manager}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    mem_limit: 256m
+    memswap_limit: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
 volumes:
   mm-data:
+  pg-data:

@@ -14,12 +14,14 @@ from app.models import (
     GenerationMode,
     GenerationStep,
     Image,
+    LimitResourceKind,
     Prompt,
     PromptMode,
     PromptVersion,
     User,
 )
 from app.schemas import GenerationCreate, GenerationOut, GenerationStepOut
+from app.services import limits as limits_service
 from app.services.jobs import run_generation
 
 router = APIRouter()
@@ -153,6 +155,8 @@ async def create_generation(
         img = await session.get(Image, rid)
         if img is None or img.user_id != user.id:
             raise HTTPException(status_code=400, detail=f"Invalid reference image id {rid}")
+
+    await limits_service.enforce(session, user, LimitResourceKind.image)
 
     params = {
         "text": prompt_text,

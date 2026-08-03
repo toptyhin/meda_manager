@@ -2,6 +2,8 @@ import { api } from './client'
 import type {
   Category,
   ChatModelPreference,
+  CreditKind,
+  CreditTransaction,
   Generation,
   GenerationMode,
   ImageKind,
@@ -18,8 +20,15 @@ import type {
   ProviderInfo,
   ProviderModelsResponse,
   ProviderSettings,
+  QuotaSnapshot,
   StyleKind,
   StylePreset,
+  Subscription,
+  TariffPlan,
+  TariffPlanPayload,
+  TgUserDetail,
+  TgUserListItem,
+  TgUserListResponse,
   User,
   VideoGeneration,
   VideoListResponse,
@@ -250,4 +259,44 @@ export const settingsApi = {
       method: 'PATCH',
       json: body,
     }),
+}
+
+export const tariffsApi = {
+  list: () => api<TariffPlan[]>('/api/admin/tariffs'),
+  create: (body: TariffPlanPayload) =>
+    api<TariffPlan>('/api/admin/tariffs', { method: 'POST', json: body }),
+  update: (id: number, body: TariffPlanPayload & { clear_description?: boolean }) =>
+    api<TariffPlan>(`/api/admin/tariffs/${id}`, { method: 'PATCH', json: body }),
+  remove: (id: number) => api<void>(`/api/admin/tariffs/${id}`, { method: 'DELETE' }),
+}
+
+export const adminUsersApi = {
+  list: (params: { q?: string; limit?: number; offset?: number } = {}) => {
+    const search = new URLSearchParams()
+    if (params.q) search.set('q', params.q)
+    if (params.limit) search.set('limit', String(params.limit))
+    if (params.offset) search.set('offset', String(params.offset))
+    const suffix = search.size ? `?${search}` : ''
+    return api<TgUserListResponse>(`/api/admin/tg-users${suffix}`)
+  },
+  get: (telegramId: number) => api<TgUserDetail>(`/api/admin/tg-users/${telegramId}`),
+  update: (telegramId: number, isBlocked: boolean) =>
+    api<TgUserListItem>(`/api/admin/tg-users/${telegramId}`, {
+      method: 'PATCH',
+      json: { is_blocked: isBlocked },
+    }),
+  assignPlan: (telegramId: number, planId: number, expiresAt: string | null) =>
+    api<Subscription>(`/api/admin/tg-users/${telegramId}/subscription`, {
+      method: 'POST',
+      json: { plan_id: planId, expires_at: expiresAt },
+    }),
+  grantCredits: (telegramId: number, amount: number, kind: CreditKind, reason: string) =>
+    api<CreditTransaction>(`/api/admin/tg-users/${telegramId}/credits`, {
+      method: 'POST',
+      json: { amount, kind, reason: reason || null },
+    }),
+}
+
+export const limitsApi = {
+  me: () => api<QuotaSnapshot>('/api/limits/me'),
 }

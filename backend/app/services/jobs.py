@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone
 from typing import Optional
 
 from sqlmodel import select
@@ -19,6 +18,7 @@ from app.models import (
     Video,
     VideoGeneration,
     VideoMode,
+    utcnow,
 )
 from app.providers.agnes import AgnesProvider
 from app.providers.base import GenerationError, ImageProvider, ImageReview, VideoProvider
@@ -40,7 +40,7 @@ async def reap_stale_jobs() -> int:
         for job in jobs:
             job.status = GenerationStatus.error
             job.error = "interrupted"
-            job.finished_at = datetime.now(timezone.utc)
+            job.finished_at = utcnow()
             session.add(job)
         if jobs:
             await session.commit()
@@ -58,7 +58,7 @@ async def reap_stale_video_jobs() -> int:
         for job in jobs:
             job.status = GenerationStatus.error
             job.error = "interrupted"
-            job.finished_at = datetime.now(timezone.utc)
+            job.finished_at = utcnow()
             session.add(job)
         if jobs:
             await session.commit()
@@ -152,7 +152,7 @@ async def _finish_job(
 
     job.status = GenerationStatus.done
     job.result_image_id = image.id
-    job.finished_at = datetime.now(timezone.utc)
+    job.finished_at = utcnow()
     job.error = None
     if review is not None:
         job.review_score = review.score
@@ -203,7 +203,7 @@ async def run_generation(job_id: int) -> None:
                 except GenerationError as exc:
                     job.status = GenerationStatus.error
                     job.error = exc.message
-                    job.finished_at = datetime.now(timezone.utc)
+                    job.finished_at = utcnow()
                     session.add(job)
                     await session.commit()
                     return
@@ -223,7 +223,7 @@ async def run_generation(job_id: int) -> None:
                 )
                 job.status = GenerationStatus.done
                 job.result_image_id = image.id
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = utcnow()
                 job.error = None
                 session.add(job)
                 await session.commit()
@@ -262,7 +262,7 @@ async def run_generation(job_id: int) -> None:
                     )
                 except GenerationError as exc:
                     step.error = exc.message
-                    step.finished_at = datetime.now(timezone.utc)
+                    step.finished_at = utcnow()
                     session.add(step)
                     await session.commit()
                     if best_image is not None:
@@ -277,7 +277,7 @@ async def run_generation(job_id: int) -> None:
                         return
                     job.status = GenerationStatus.error
                     job.error = exc.message
-                    job.finished_at = datetime.now(timezone.utc)
+                    job.finished_at = utcnow()
                     session.add(job)
                     await session.commit()
                     return
@@ -313,7 +313,7 @@ async def run_generation(job_id: int) -> None:
                     # Fail-open: accept current image without further fixes
                     last_review_error = exc.message
                     step.error = f"review failed: {exc.message}"
-                    step.finished_at = datetime.now(timezone.utc)
+                    step.finished_at = utcnow()
                     session.add(step)
                     await session.commit()
                     await _finish_job(
@@ -330,7 +330,7 @@ async def run_generation(job_id: int) -> None:
                 step.review_passed = review.passed
                 step.review_issues = json.dumps(review.issues, ensure_ascii=False)
                 step.review_fix_mode = review.fix_mode
-                step.finished_at = datetime.now(timezone.utc)
+                step.finished_at = utcnow()
                 session.add(step)
                 await session.commit()
 
@@ -378,7 +378,7 @@ async def run_generation(job_id: int) -> None:
             if best_image is None:
                 job.status = GenerationStatus.error
                 job.error = last_review_error or "no successful attempt"
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = utcnow()
                 session.add(job)
                 await session.commit()
                 return
@@ -407,7 +407,7 @@ async def run_generation(job_id: int) -> None:
             if job and job.status != GenerationStatus.done:
                 job.status = GenerationStatus.error
                 job.error = "internal error"
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = utcnow()
                 session.add(job)
                 await session.commit()
     finally:
@@ -459,7 +459,7 @@ async def run_video_generation(job_id: int) -> None:
                 if not settings.public_base_url:
                     job.status = GenerationStatus.error
                     job.error = "PUBLIC_BASE_URL is not configured (required for image-based video modes)"
-                    job.finished_at = datetime.now(timezone.utc)
+                    job.finished_at = utcnow()
                     session.add(job)
                     await session.commit()
                     return
@@ -468,7 +468,7 @@ async def run_video_generation(job_id: int) -> None:
                     if img is None or img.user_id != job.user_id:
                         job.status = GenerationStatus.error
                         job.error = f"Invalid source image id {sid}"
-                        job.finished_at = datetime.now(timezone.utc)
+                        job.finished_at = utcnow()
                         session.add(job)
                         await session.commit()
                         return
@@ -477,7 +477,7 @@ async def run_video_generation(job_id: int) -> None:
                     except ValueError as exc:
                         job.status = GenerationStatus.error
                         job.error = str(exc)
-                        job.finished_at = datetime.now(timezone.utc)
+                        job.finished_at = utcnow()
                         session.add(job)
                         await session.commit()
                         return
@@ -497,7 +497,7 @@ async def run_video_generation(job_id: int) -> None:
             except GenerationError as exc:
                 job.status = GenerationStatus.error
                 job.error = exc.message
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = utcnow()
                 session.add(job)
                 await session.commit()
                 return
@@ -518,7 +518,7 @@ async def run_video_generation(job_id: int) -> None:
                 except GenerationError as exc:
                     job.status = GenerationStatus.error
                     job.error = exc.message
-                    job.finished_at = datetime.now(timezone.utc)
+                    job.finished_at = utcnow()
                     session.add(job)
                     await session.commit()
                     return
@@ -531,7 +531,7 @@ async def run_video_generation(job_id: int) -> None:
                     if not result.url:
                         job.status = GenerationStatus.error
                         job.error = "Video completed but no URL returned"
-                        job.finished_at = datetime.now(timezone.utc)
+                        job.finished_at = utcnow()
                         session.add(job)
                         await session.commit()
                         return
@@ -543,7 +543,7 @@ async def run_video_generation(job_id: int) -> None:
                 if result.status == "failed":
                     job.status = GenerationStatus.error
                     job.error = result.error or "Video generation failed"
-                    job.finished_at = datetime.now(timezone.utc)
+                    job.finished_at = utcnow()
                     session.add(job)
                     await session.commit()
                     return
@@ -552,7 +552,7 @@ async def run_video_generation(job_id: int) -> None:
             else:
                 job.status = GenerationStatus.error
                 job.error = "Video generation timed out"
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = utcnow()
                 session.add(job)
                 await session.commit()
                 return
@@ -562,7 +562,7 @@ async def run_video_generation(job_id: int) -> None:
             except GenerationError as exc:
                 job.status = GenerationStatus.error
                 job.error = exc.message
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = utcnow()
                 session.add(job)
                 await session.commit()
                 return
@@ -592,7 +592,7 @@ async def run_video_generation(job_id: int) -> None:
             job.status = GenerationStatus.done
             job.progress = 100
             job.result_video_id = video.id
-            job.finished_at = datetime.now(timezone.utc)
+            job.finished_at = utcnow()
             job.error = None
             session.add(job)
             await session.commit()
@@ -604,7 +604,7 @@ async def run_video_generation(job_id: int) -> None:
             if job and job.status != GenerationStatus.done:
                 job.status = GenerationStatus.error
                 job.error = "internal error"
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = utcnow()
                 session.add(job)
                 await session.commit()
     finally:

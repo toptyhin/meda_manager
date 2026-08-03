@@ -10,6 +10,8 @@ import { PromptsPage } from './pages/PromptsPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StylesPage } from './pages/StylesPage'
+import { TariffsPage } from './pages/TariffsPage'
+import { UsersPage } from './pages/UsersPage'
 import { VideoPage } from './pages/VideoPage'
 import type { ReactNode } from 'react'
 
@@ -46,6 +48,8 @@ export default function App() {
         <Route path="models" element={<ModelsPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="invites" element={<InvitesPage />} />
+        <Route path="tariffs" element={<TariffsPage />} />
+        <Route path="users" element={<UsersPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

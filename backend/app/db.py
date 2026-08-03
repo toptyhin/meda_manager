@@ -9,10 +9,14 @@ from app.config import get_settings
 
 settings = get_settings()
 
+_connect_args: dict = {}
+if settings.effective_database_url.startswith("sqlite"):
+    _connect_args = {"check_same_thread": False}
+
 engine = create_async_engine(
-    settings.database_url,
+    settings.effective_database_url,
     echo=False,
-    connect_args={"check_same_thread": False},
+    connect_args=_connect_args,
 )
 
 async_session_factory = async_sessionmaker(
@@ -23,7 +27,12 @@ async_session_factory = async_sessionmaker(
 
 
 def _migrate(conn) -> None:
-    # create_all does not alter existing tables; add missing columns here
+    # create_all does not alter existing tables; add missing columns here.
+    # Legacy SQLite migrations only — a fresh Postgres gets the full schema
+    # from create_all, and the SQL below is SQLite dialect.
+    if conn.dialect.name != "sqlite":
+        return
+
     invites_cols = {c["name"] for c in inspect(conn).get_columns("invites")}
     if "is_blocked" not in invites_cols:
         conn.execute(

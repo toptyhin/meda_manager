@@ -38,8 +38,13 @@ class Settings(BaseSettings):
 
     jwt_secret: str = "change-me-in-production"
     jwt_expire_hours: int = 72
+    # Telegram Mini App auth: bot token validates initData HMAC; empty disables it.
+    telegram_bot_token: str = ""
+    telegram_init_data_max_age: int = 86400
     data_dir: Path = ROOT_DIR / "data"
     frontend_dist: Path = ROOT_DIR / "frontend" / "dist"
+    # Empty means local SQLite under data_dir; set to postgresql+asyncpg://... for Postgres.
+    database_url: str = ""
     bootstrap_invite: str = ""
     cors_origins: str = "http://localhost:5173"
     public_base_url: str = ""
@@ -52,7 +57,9 @@ class Settings(BaseSettings):
 
 
     @property
-    def database_url(self) -> str:
+    def effective_database_url(self) -> str:
+        if self.database_url:
+            return self.database_url
         return f"sqlite+aiosqlite:///{self.data_dir / 'app.db'}"
 
     @property

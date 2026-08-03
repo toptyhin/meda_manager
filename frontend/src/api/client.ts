@@ -25,7 +25,13 @@ async function parseError(res: Response): Promise<ApiError> {
   try {
     const data = await res.json()
     if (typeof data.detail === 'string') detail = data.detail
-    else if (Array.isArray(data.detail)) detail = data.detail.map((d: { msg?: string }) => d.msg).join(', ')
+    else if (Array.isArray(data.detail))
+      detail = data.detail.map((d: { msg?: string }) => d.msg).join(', ')
+    else if (data.detail && typeof data.detail === 'object') {
+      // Structured errors (e.g. 429 quota_exceeded) carry a message field.
+      const d = data.detail as { message?: string; code?: string }
+      detail = d.message ?? d.code ?? res.statusText
+    }
   } catch {
     /* ignore */
   }

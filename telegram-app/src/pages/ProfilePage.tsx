@@ -1,4 +1,75 @@
+import { useQuery } from '@tanstack/react-query'
+import { limitsApi, type QuotaResource } from '../api/limits'
 import { useTelegramUser } from '../twa/telegram'
+
+const RESOURCE_LABELS: Record<QuotaResource['resource_kind'], string> = {
+  image: 'Изображения',
+  video: 'Видео',
+}
+
+const PERIOD_LABELS: Record<QuotaResource['period'], string> = {
+  daily: 'в день',
+  weekly: 'в неделю',
+  monthly: 'в месяц',
+  total: 'всего',
+}
+
+function fmtReset(resetAt: string | null): string | null {
+  if (!resetAt) return null
+  const d = new Date(resetAt)
+  return Number.isNaN(d.getTime()) ? null : d.toLocaleString('ru-RU')
+}
+
+function QuotaCard() {
+  const quota = useQuery({ queryKey: ['limits-me'], queryFn: limitsApi.me })
+
+  if (quota.isLoading) {
+    return <p className="px-4 py-3 text-sm text-muted">Загрузка лимитов…</p>
+  }
+  if (quota.isError || !quota.data) {
+    return <p className="px-4 py-3 text-sm text-muted">Не удалось загрузить лимиты</p>
+  }
+
+  const q = quota.data
+  if (!q.enforcement_enabled) {
+    return (
+      <p className="px-4 py-3 text-sm text-muted">
+        Лимиты пока не настроены — генерации без ограничений.
+      </p>
+    )
+  }
+
+  const rows: Array<[string, string]> = q.resources.map((r) => {
+    const label = `${RESOURCE_LABELS[r.resource_kind]} ${PERIOD_LABELS[r.period]}`
+    if (r.limit == null) return [label, 'безлимит']
+    const reset = fmtReset(r.reset_at)
+    const value = `${r.remaining ?? 0} из ${r.limit}${reset ? ` · обновится ${reset}` : ''}`
+    return [label, value]
+  })
+  rows.push(['Кредиты', String(q.credits)])
+
+  return (
+    <div className="divide-y divide-line">
+      {q.plan && (
+        <div className="flex items-center justify-between px-4 py-3 text-sm">
+          <span className="text-muted">Тариф</span>
+          <span className="font-medium">
+            {q.plan.name}
+            {q.plan.expires_at && (
+              <span className="text-muted text-xs"> · до {fmtReset(q.plan.expires_at)}</span>
+            )}
+          </span>
+        </div>
+      )}
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
+          <span className="text-muted">{label}</span>
+          <span className="font-medium text-right">{value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function ProfilePage() {
   const user = useTelegramUser()
@@ -40,6 +111,13 @@ export function ProfilePage() {
           </div>
         ))}
       </div>
+
+      <section className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-muted uppercase tracking-wide">Тариф и лимиты</h2>
+        <div className="rounded-2xl border border-line bg-card">
+          <QuotaCard />
+        </div>
+      </section>
 
       <p className="text-center text-xs text-muted">
         Настройки генерации и уведомлений появятся позже.

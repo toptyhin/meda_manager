@@ -28,13 +28,17 @@ class CatalogResult:
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    # Naive UTC — matches SQLAlchemy DateTime (TIMESTAMP WITHOUT TIME ZONE) and
+    # keeps asyncpg happy; see models.utcnow.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _as_utc(dt: datetime) -> datetime:
+    # Normalize to naive UTC; SQLite/fromisoformat reads may be aware or naive
+    # depending on how the row was written.
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _serialize_models(models: list[ModelInfo]) -> str:

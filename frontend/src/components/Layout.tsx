@@ -168,13 +168,29 @@ export function Layout() {
             Инвайты
           </NavLink>
           {user?.is_admin && (
-            <NavLink
-              to="/settings"
-              className={sideLinkClass}
-              onClick={() => setMenuOpen(false)}
-            >
-              Настройки
-            </NavLink>
+            <>
+              <NavLink
+                to="/tariffs"
+                className={sideLinkClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                Тарифы
+              </NavLink>
+              <NavLink
+                to="/users"
+                className={sideLinkClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                Пользователи
+              </NavLink>
+              <NavLink
+                to="/settings"
+                className={sideLinkClass}
+                onClick={() => setMenuOpen(false)}
+              >
+                Настройки
+              </NavLink>
+            </>
           )}
         </nav>
       </dialog>

@@ -41,6 +41,7 @@ WORKDIR /app
 
 COPY --from=deps /app/.venv /app/.venv
 COPY --chown=app:app backend/app ./backend/app
+COPY --chown=app:app backend/scripts ./backend/scripts
 COPY --from=frontend --chown=app:app /src/dist ./frontend/dist
 
 ENV PATH="/app/.venv/bin:$PATH" \

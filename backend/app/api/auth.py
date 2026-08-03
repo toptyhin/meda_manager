@@ -1,3 +1,4 @@
+import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,11 +12,24 @@ from app.auth import (
     hash_password,
     verify_password,
 )
+from app.config import get_settings
 from app.db import get_session
-from app.models import Category, Invite, Prompt, PromptMode, PromptSource, PromptVersion, User
-from app.schemas import LoginRequest, RegisterRequest, TokenResponse, UserOut
+from app.models import (
+    Category,
+    Invite,
+    Prompt,
+    PromptMode,
+    PromptSource,
+    PromptVersion,
+    TelegramAccount,
+    User,
+    utcnow,
+)
+from app.schemas import LoginRequest, RegisterRequest, TelegramAuthRequest, TokenResponse, UserOut
+from app.services.telegram_auth import InitDataError, validate_init_data
 
 router = APIRouter()
+settings = get_settings()
 
 DEFAULT_CATEGORY_NAMES = ("Семья", "Отпуск", "Мода")
 
@@ -94,6 +108,34 @@ DEFAULT_PROMPT_PRESETS: tuple[tuple[str, str, PromptMode, str], ...] = (
 )
 
 
+async def _seed_default_content(session: AsyncSession, user: User) -> None:
+    """Starter categories and prompt presets for a new account."""
+    categories: dict[str, Category] = {}
+    for name in DEFAULT_CATEGORY_NAMES:
+        category = Category(user_id=user.id, name=name)  # type: ignore[arg-type]
+        session.add(category)
+        categories[name] = category
+    await session.flush()
+
+    for category_name, title, mode, text in DEFAULT_PROMPT_PRESETS:
+        prompt = Prompt(
+            user_id=user.id,  # type: ignore[arg-type]
+            category_id=categories[category_name].id,  # type: ignore[arg-type]
+            title=title,
+            mode=mode,
+        )
+        session.add(prompt)
+        await session.flush()
+        session.add(
+            PromptVersion(
+                prompt_id=prompt.id,  # type: ignore[arg-type]
+                version=1,
+                text=text,
+                source=PromptSource.manual,
+            )
+        )
+
+
 @router.post("/register", response_model=TokenResponse)
 async def register(
     body: RegisterRequest,
@@ -121,30 +163,7 @@ async def register(
 
     invite.used_by = user.id
     session.add(invite)
-    categories: dict[str, Category] = {}
-    for name in DEFAULT_CATEGORY_NAMES:
-        category = Category(user_id=user.id, name=name)  # type: ignore[arg-type]
-        session.add(category)
-        categories[name] = category
-    await session.flush()
-
-    for category_name, title, mode, text in DEFAULT_PROMPT_PRESETS:
-        prompt = Prompt(
-            user_id=user.id,  # type: ignore[arg-type]
-            category_id=categories[category_name].id,  # type: ignore[arg-type]
-            title=title,
-            mode=mode,
-        )
-        session.add(prompt)
-        await session.flush()
-        session.add(
-            PromptVersion(
-                prompt_id=prompt.id,  # type: ignore[arg-type]
-                version=1,
-                text=text,
-                source=PromptSource.manual,
-            )
-        )
+    await _seed_default_content(session, user)
     await session.commit()
 
     token = create_access_token(user.id, user.username)
@@ -160,6 +179,62 @@ async def login(
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     return TokenResponse(access_token=create_access_token(user.id, user.username))
+
+
+@router.post("/telegram", response_model=TokenResponse)
+async def login_telegram(
+    body: TelegramAuthRequest,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> TokenResponse:
+    """Mini App login: validate initData, upsert the Telegram account and its
+    shadow web user, return a regular JWT."""
+    if not settings.telegram_bot_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Telegram auth is not configured",
+        )
+    try:
+        identity = validate_init_data(
+            body.init_data,
+            settings.telegram_bot_token,
+            settings.telegram_init_data_max_age,
+        )
+    except InitDataError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+
+    account = await session.get(TelegramAccount, identity.telegram_id)
+    if account is not None and account.is_blocked:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked")
+
+    if account is None:
+        account = TelegramAccount(telegram_id=identity.telegram_id)
+    account.username = identity.username
+    account.first_name = identity.first_name
+    account.last_name = identity.last_name
+    account.photo_url = identity.photo_url
+    account.language_code = identity.language_code
+    account.is_premium = identity.is_premium
+    account.last_seen_at = utcnow()
+
+    user = None
+    if account.linked_user_id is not None:
+        user = await session.get(User, account.linked_user_id)
+    if user is None:
+        # Shadow web user owns the content; password is random and unknown —
+        # login happens only via initData (or a future web-account link).
+        user = User(
+            username=f"tg_{identity.telegram_id}",
+            password_hash=hash_password(secrets.token_urlsafe(32)),
+            is_admin=False,
+        )
+        session.add(user)
+        await session.flush()
+        account.linked_user_id = user.id
+        await _seed_default_content(session, user)
+
+    session.add(account)
+    await session.commit()
+    return TokenResponse(access_token=create_access_token(user.id, user.username))  # type: ignore[arg-type]
 
 
 @router.get("/me", response_model=UserOut)

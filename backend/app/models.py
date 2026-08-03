@@ -2,12 +2,15 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import Column, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Column, ForeignKey, Text, UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    # Naive UTC: SQLAlchemy DateTime columns are TIMESTAMP WITHOUT TIME ZONE on
+    # Postgres, and asyncpg rejects tz-aware values for them; SQLite drops tz
+    # on write anyway, so reads are naive on both backends.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class ImageKind(str, Enum):
@@ -58,6 +61,29 @@ class StyleKind(str, Enum):
     both = "both"
 
 
+class LimitResourceKind(str, Enum):
+    """Metered operation kinds. Add new values to meter more endpoints."""
+
+    image = "image"
+    video = "video"
+
+
+class LimitPeriod(str, Enum):
+    """Calendar windows in UTC; total = all-time."""
+
+    daily = "daily"
+    weekly = "weekly"
+    monthly = "monthly"
+    total = "total"
+
+
+class CreditKind(str, Enum):
+    paid = "paid"
+    bonus = "bonus"
+    adjustment = "adjustment"
+    consume = "consume"
+
+
 class User(SQLModel, table=True):
     __tablename__ = "users"
 
@@ -77,6 +103,26 @@ class Invite(SQLModel, table=True):
     used_by: Optional[int] = Field(default=None, foreign_key="users.id")
     is_blocked: bool = False
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class TelegramAccount(SQLModel, table=True):
+    """Telegram identity provisioned from Mini App initData, linked 1:1 to a
+    shadow web user that owns the generated content. Subject of quota limits."""
+
+    __tablename__ = "telegram_accounts"
+
+    # Telegram user ids exceed int32, hence BigInteger.
+    telegram_id: int = Field(sa_column=Column(BigInteger, primary_key=True))
+    username: Optional[str] = Field(default=None, index=True, max_length=64)
+    first_name: str = Field(default="", max_length=128)
+    last_name: Optional[str] = Field(default=None, max_length=128)
+    photo_url: Optional[str] = Field(default=None, max_length=512)
+    language_code: Optional[str] = Field(default=None, max_length=16)
+    is_premium: bool = False
+    linked_user_id: Optional[int] = Field(default=None, foreign_key="users.id", unique=True)
+    is_blocked: bool = False
+    first_seen_at: datetime = Field(default_factory=utcnow)
+    last_seen_at: datetime = Field(default_factory=utcnow)
 
 
 class Category(SQLModel, table=True):
@@ -265,3 +311,78 @@ class UserChatPreference(SQLModel, table=True):
     provider: str = Field(max_length=32)
     model: str = Field(max_length=256)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class TariffPlan(SQLModel, table=True):
+    """Named bundle of periodic quotas; assigned to Telegram accounts."""
+
+    __tablename__ = "tariff_plans"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, max_length=128)
+    description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    # New Telegram accounts fall back to the default plan when they have no
+    # active subscription.
+    is_default: bool = False
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class TariffLimit(SQLModel, table=True):
+    """One periodic quota row inside a plan: max N generations per period.
+    max_count=None means unlimited; credit_cost is charged from the credit
+    balance once the periodic quota is exhausted."""
+
+    __tablename__ = "tariff_limits"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    plan_id: int = Field(
+        sa_column=Column(
+            ForeignKey("tariff_plans.id", ondelete="CASCADE"), index=True, nullable=False
+        )
+    )
+    resource_kind: LimitResourceKind
+    period: LimitPeriod
+    max_count: Optional[int] = Field(default=None, ge=0)
+    credit_cost: int = Field(default=1, ge=1)
+
+
+class UserSubscription(SQLModel, table=True):
+    """Plan assignment history for a Telegram account. The effective plan is
+    the latest non-expired row; expires_at=None is indefinite."""
+
+    __tablename__ = "user_subscriptions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    telegram_id: int = Field(
+        sa_column=Column(
+            ForeignKey("telegram_accounts.telegram_id"), index=True, nullable=False
+        )
+    )
+    plan_id: int = Field(foreign_key="tariff_plans.id", index=True)
+    created_by: Optional[int] = Field(default=None, foreign_key="users.id")
+    expires_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class CreditTransaction(SQLModel, table=True):
+    """Append-only credit ledger; balance = SUM(amount). Positive rows are
+    grants (paid packs, bonuses, manual adjustments), negative rows are
+    consumption by the limits service or manual debits. `source` anticipates
+    future payment integrations (e.g. telegram_stars)."""
+
+    __tablename__ = "credit_transactions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    telegram_id: int = Field(
+        sa_column=Column(
+            ForeignKey("telegram_accounts.telegram_id"), index=True, nullable=False
+        )
+    )
+    amount: int
+    kind: CreditKind
+    reason: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    created_by: Optional[int] = Field(default=None, foreign_key="users.id")
+    source: str = Field(default="manual", max_length=32)
+    created_at: datetime = Field(default_factory=utcnow)

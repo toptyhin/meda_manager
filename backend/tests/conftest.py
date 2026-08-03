@@ -20,6 +20,18 @@ os.environ["AGNES_API_KEY"] = "test-key"
 os.environ["BOOTSTRAP_INVITE"] = "test-invite-code"
 os.environ["CORS_ORIGINS"] = "http://localhost:5173"
 os.environ["PUBLIC_BASE_URL"] = "http://test"
+os.environ["TELEGRAM_BOT_TOKEN"] = "test-bot-token-123"
+# Default test DB is SQLite under TEST_DATA. TEST_DATABASE_URL allows running
+# the suite against Postgres (e.g. a throwaway docker container) to verify
+# dialect compatibility. Guard against pointing it at a real database.
+_test_db_url = os.environ.get("TEST_DATABASE_URL", "")
+if _test_db_url:
+    if "test" not in _test_db_url.rsplit("/", 1)[-1]:
+        raise RuntimeError(
+            "TEST_DATABASE_URL database name must contain 'test' "
+            "(the suite drops and recreates all tables)"
+        )
+    os.environ["DATABASE_URL"] = _test_db_url
 
 from app.config import get_settings
 

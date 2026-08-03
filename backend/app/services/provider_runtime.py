@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import Any, Optional
 
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -358,7 +357,7 @@ async def upsert_credential(
         cleaned = chat_model.strip()
         row.chat_model = cleaned or None
 
-    row.updated_at = datetime.now(timezone.utc)
+    row.updated_at = utcnow()
     session.add(row)
     await session.commit()
     await session.refresh(row)
