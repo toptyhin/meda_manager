@@ -6,11 +6,16 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from app.auth import get_admin_user
 from app.db import get_session
-from app.models import AppPromptKind, AppPromptTemplate, User
+from app.models import AppPromptKind, AppPromptTemplate, PromptGenIntent, User
 from app.providers.base import GenerationError
 from app.schemas import (
     AppPromptTemplateOut,
+    AppPromptTemplateRestore,
     AppPromptTemplateUpdate,
+    AppPromptTemplateVersionOut,
+    PromptGenIntentCreate,
+    PromptGenIntentOut,
+    PromptGenIntentUpdate,
     PromptGenPreviewRequest,
     ProviderCapabilitiesOut,
     ProviderSettingsOut,
@@ -83,6 +88,23 @@ async def update_provider_settings(
 # --- Prompt-generation template («Придумай промпт») ---
 
 
+def _template_out(
+    text: str,
+    version: int | None,
+    versions: list[AppPromptTemplate],
+    updated_at=None,
+) -> AppPromptTemplateOut:
+    return AppPromptTemplateOut(
+        kind=AppPromptKind.prompt_gen.value,
+        text=text,
+        version=version,
+        is_default=version is None,
+        default_text=prompt_gen.DEFAULT_PROMPT_GEN_TEMPLATE,
+        updated_at=updated_at,
+        versions=[AppPromptTemplateVersionOut.model_validate(v) for v in versions],
+    )
+
+
 @router.get("/prompt-template", response_model=AppPromptTemplateOut)
 async def get_prompt_template(
     admin: Annotated[User, Depends(get_admin_user)],
@@ -90,13 +112,9 @@ async def get_prompt_template(
 ) -> AppPromptTemplateOut:
     _ = admin
     text, version = await prompt_gen.get_prompt_gen_template(session)
-    return AppPromptTemplateOut(
-        kind=AppPromptKind.prompt_gen.value,
-        text=text,
-        version=version,
-        is_default=version is None,
-        default_text=prompt_gen.DEFAULT_PROMPT_GEN_TEMPLATE,
-    )
+    versions = await prompt_gen.list_prompt_gen_versions(session)
+    updated_at = versions[0].created_at if versions else None
+    return _template_out(text, version, versions, updated_at)
 
 
 @router.put("/prompt-template", response_model=AppPromptTemplateOut)
@@ -118,14 +136,40 @@ async def update_prompt_template(
     )
     session.add(template)
     await session.commit()
-    return AppPromptTemplateOut(
-        kind=AppPromptKind.prompt_gen.value,
-        text=text,
-        version=next_version,
-        is_default=False,
-        default_text=prompt_gen.DEFAULT_PROMPT_GEN_TEMPLATE,
-        updated_at=template.created_at,
+    await session.refresh(template)
+    versions = await prompt_gen.list_prompt_gen_versions(session)
+    return _template_out(text, next_version, versions, template.created_at)
+
+
+@router.post("/prompt-template/restore", response_model=AppPromptTemplateOut)
+async def restore_prompt_template(
+    body: AppPromptTemplateRestore,
+    admin: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> AppPromptTemplateOut:
+    """Restore an old version: its text is saved as a new (latest) version."""
+    result = await session.exec(
+        select(AppPromptTemplate).where(
+            AppPromptTemplate.kind == AppPromptKind.prompt_gen,
+            AppPromptTemplate.version == body.version,
+        )
     )
+    source = result.first()
+    if source is None:
+        raise HTTPException(status_code=404, detail="Version not found")
+    _, current_version = await prompt_gen.get_prompt_gen_template(session)
+    next_version = (current_version or 0) + 1
+    template = AppPromptTemplate(
+        kind=AppPromptKind.prompt_gen,
+        version=next_version,
+        text=source.text,
+        updated_by=admin.id,
+    )
+    session.add(template)
+    await session.commit()
+    await session.refresh(template)
+    versions = await prompt_gen.list_prompt_gen_versions(session)
+    return _template_out(source.text, next_version, versions, template.created_at)
 
 
 @router.delete("/prompt-template", response_model=AppPromptTemplateOut)
@@ -163,7 +207,12 @@ async def preview_prompt_template(
         template = body.text.strip()
         if not template:
             raise HTTPException(status_code=400, detail="Template text cannot be empty")
-    system = prompt_gen.render_prompt_gen_system(template, body.mode)
+    try:
+        intent = await prompt_gen.get_prompt_gen_intent(session, body.intent)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    instruction = intent.instruction.strip() if intent is not None else ""
+    system = prompt_gen.render_prompt_gen_system(template, body.mode, instruction)
     user_text = body.hint.strip() or prompt_gen.SUGGEST_DEFAULT_REQUEST
     try:
         provider = await get_chat_provider_for_user(session, user=admin)
@@ -176,3 +225,86 @@ async def preview_prompt_template(
     finally:
         await provider.aclose()
     return SuggestPromptResponse(text=text)
+
+
+# --- Prompt-generation intents («Придумай промпт» настроения) ---
+
+
+@router.get("/prompt-gen-intents", response_model=list[PromptGenIntentOut])
+async def list_prompt_gen_intents(
+    admin: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[PromptGenIntentOut]:
+    _ = admin
+    result = await session.exec(
+        select(PromptGenIntent).order_by(PromptGenIntent.position, PromptGenIntent.id)
+    )
+    return [PromptGenIntentOut.model_validate(i) for i in result.all()]
+
+
+@router.post(
+    "/prompt-gen-intents",
+    response_model=PromptGenIntentOut,
+    status_code=201,
+)
+async def create_prompt_gen_intent(
+    body: PromptGenIntentCreate,
+    admin: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PromptGenIntent:
+    _ = admin
+    exists = await session.exec(
+        select(PromptGenIntent.id).where(PromptGenIntent.key == body.key).limit(1)
+    )
+    if exists.first() is not None:
+        raise HTTPException(status_code=409, detail="Intent key already exists")
+    intent = PromptGenIntent(
+        key=body.key,
+        label=body.label.strip(),
+        instruction=body.instruction.strip(),
+        is_active=body.is_active,
+        position=body.position,
+    )
+    session.add(intent)
+    await session.commit()
+    await session.refresh(intent)
+    return intent
+
+
+@router.patch("/prompt-gen-intents/{intent_id}", response_model=PromptGenIntentOut)
+async def update_prompt_gen_intent(
+    intent_id: int,
+    body: PromptGenIntentUpdate,
+    admin: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PromptGenIntent:
+    _ = admin
+    intent = await session.get(PromptGenIntent, intent_id)
+    if intent is None:
+        raise HTTPException(status_code=404, detail="Intent not found")
+    if body.label is not None:
+        intent.label = body.label.strip()
+    if body.instruction is not None:
+        intent.instruction = body.instruction.strip()
+    if body.is_active is not None:
+        intent.is_active = body.is_active
+    if body.position is not None:
+        intent.position = body.position
+    session.add(intent)
+    await session.commit()
+    await session.refresh(intent)
+    return intent
+
+
+@router.delete("/prompt-gen-intents/{intent_id}", status_code=204)
+async def delete_prompt_gen_intent(
+    intent_id: int,
+    admin: Annotated[User, Depends(get_admin_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> None:
+    _ = admin
+    intent = await session.get(PromptGenIntent, intent_id)
+    if intent is None:
+        raise HTTPException(status_code=404, detail="Intent not found")
+    await session.delete(intent)
+    await session.commit()

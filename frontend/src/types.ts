@@ -241,6 +241,14 @@ export type ProviderSettings = {
 }
 
 /** Глобальный шаблон «Придумай промпт» (админ). */
+export type AppPromptTemplateVersion = {
+  id: number
+  version: number
+  text: string
+  updated_by: number | null
+  created_at: string
+}
+
 export type AppPromptTemplate = {
   kind: string
   text: string
@@ -248,6 +256,18 @@ export type AppPromptTemplate = {
   is_default: boolean
   default_text: string
   updated_at: string | null
+  versions: AppPromptTemplateVersion[]
+}
+
+/** Настроение «Придумай промпт» (админ управляет в БД). */
+export type PromptGenIntent = {
+  id: number
+  key: string
+  label: string
+  instruction: string
+  is_active: boolean
+  position: number
+  created_at: string
 }
 
 export type ChatModelPreference = {

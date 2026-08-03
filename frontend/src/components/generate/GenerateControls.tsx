@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query'
+import { assistantApi } from '../../api'
 import { SettingsIconButton } from '../SettingsIconButton'
 import {
   GEN_RATIOS,
@@ -15,6 +17,8 @@ type Props = {
   onImprove: () => void
   suggesting?: boolean
   onSuggest?: () => void
+  suggestIntent?: string | null
+  onSuggestIntentChange?: (intent: string | null) => void
   onShowTplSettings: () => void
   canDescribe?: boolean
   describing?: boolean
@@ -33,6 +37,8 @@ export function GenerateControls({
   onImprove,
   suggesting = false,
   onSuggest,
+  suggestIntent = null,
+  onSuggestIntentChange,
   onShowTplSettings,
   canDescribe = false,
   describing = false,
@@ -42,6 +48,12 @@ export function GenerateControls({
   busy,
   onSubmit,
 }: Props) {
+  const intents = useQuery({
+    queryKey: ['suggest-intents'],
+    queryFn: assistantApi.listSuggestIntents,
+    enabled: onSuggest != null,
+    staleTime: 60_000,
+  })
   return (
     <div className="flex flex-wrap gap-3 items-end">
       <label className="text-sm">
@@ -103,15 +115,33 @@ export function GenerateControls({
           </button>
         )}
         {onSuggest && (
-          <button
-            type="button"
-            disabled={suggesting || improving}
-            onClick={onSuggest}
-            title="Придумать новый промпт с нуля"
-            className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-line/40 disabled:opacity-50"
-          >
-            {suggesting ? 'Придумываем…' : 'Придумай промпт'}
-          </button>
+          <div className="inline-flex items-stretch gap-1">
+            <button
+              type="button"
+              disabled={suggesting || improving}
+              onClick={onSuggest}
+              title="Придумать новый промпт с нуля"
+              className="rounded-lg border border-line px-4 py-2 text-sm hover:bg-line/40 disabled:opacity-50"
+            >
+              {suggesting ? 'Придумываем…' : 'Придумай промпт'}
+            </button>
+            {onSuggestIntentChange && (intents.data?.length ?? 0) > 0 && (
+              <select
+                aria-label="Настроение промпта"
+                title="Настроение для «Придумай промпт»"
+                className="self-stretch rounded-lg border border-line bg-paper px-2 text-sm text-muted"
+                value={suggestIntent ?? ''}
+                onChange={(e) => onSuggestIntentChange(e.target.value || null)}
+              >
+                <option value="">Любое</option>
+                {(intents.data ?? []).map((i) => (
+                  <option key={i.key} value={i.key}>
+                    {i.label}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
         )}
         <div className="inline-flex items-stretch gap-1">
           <button

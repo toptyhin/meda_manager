@@ -13,6 +13,7 @@ from app.api import api_router
 from app.config import get_settings
 from app.db import async_session_factory, init_db
 from app.models import Invite
+from app.services import prompt_gen
 from app.services.jobs import reap_stale_jobs, reap_stale_video_jobs
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,10 @@ async def lifespan(_app: FastAPI):
     if nv:
         logger.info("Reaped %s stale video generation jobs", nv)
     await ensure_bootstrap_invite()
+    async with async_session_factory() as session:
+        seeded = await prompt_gen.seed_prompt_gen_intents(session)
+    if seeded:
+        logger.info("Seeded %d prompt-gen intents", seeded)
     yield
 
 

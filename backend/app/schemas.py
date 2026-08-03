@@ -329,10 +329,22 @@ class SuggestPromptRequest(BaseModel):
     # Optional user hint/theme; empty = invent from scratch.
     hint: str = Field(default="", max_length=2000)
     mode: str = Field(default="t2i", pattern="^(t2i|i2i)$")
+    # PromptGenIntent key; None = neutral mood.
+    intent: Optional[str] = Field(default=None, max_length=64)
 
 
 class SuggestPromptResponse(BaseModel):
     text: str
+
+
+class AppPromptTemplateVersionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    version: int
+    text: str
+    updated_by: Optional[int] = None
+    created_at: datetime
 
 
 class AppPromptTemplateOut(BaseModel):
@@ -342,10 +354,15 @@ class AppPromptTemplateOut(BaseModel):
     is_default: bool
     default_text: str
     updated_at: Optional[datetime] = None
+    versions: list[AppPromptTemplateVersionOut] = Field(default_factory=list)
 
 
 class AppPromptTemplateUpdate(BaseModel):
     text: str = Field(min_length=1)
+
+
+class AppPromptTemplateRestore(BaseModel):
+    version: int
 
 
 class PromptGenPreviewRequest(BaseModel):
@@ -353,6 +370,34 @@ class PromptGenPreviewRequest(BaseModel):
     text: Optional[str] = None
     hint: str = Field(default="", max_length=2000)
     mode: str = Field(default="t2i", pattern="^(t2i|i2i)$")
+    intent: Optional[str] = Field(default=None, max_length=64)
+
+
+class PromptGenIntentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    key: str
+    label: str
+    instruction: str
+    is_active: bool
+    position: int
+    created_at: datetime
+
+
+class PromptGenIntentCreate(BaseModel):
+    key: str = Field(min_length=1, max_length=64, pattern="^[a-z0-9_-]+$")
+    label: str = Field(min_length=1, max_length=128)
+    instruction: str = Field(min_length=1)
+    is_active: bool = True
+    position: int = 0
+
+
+class PromptGenIntentUpdate(BaseModel):
+    label: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    instruction: Optional[str] = Field(default=None, min_length=1)
+    is_active: Optional[bool] = None
+    position: Optional[int] = None
 
 
 # --- Providers / model catalog ---

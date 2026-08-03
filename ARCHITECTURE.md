@@ -8,18 +8,18 @@
 
 ### Backend (`backend/app/`)
 
-- `main.py` — FastAPI app, lifespan (init_db → reap stale jobs → bootstrap invite), SPA-раздача из `frontend/dist`, `/api/health`.
+- `main.py` — FastAPI app, lifespan (init_db → reap stale jobs → bootstrap invite → сид prompt-gen интентов), SPA-раздача из `frontend/dist`, `/api/health`.
 - `config.py` — `Settings` (pydantic-settings, `.env` в корне репо); валидатор Postgres-only.
 - `db.py` — async engine + session factory; `init_db()` = `create_all` + создание каталогов данных.
-- `models.py` — SQLModel-модели: пользователи/инвайты/Telegram-аккаунты, категории/промпты/версии, изображения (`ImageKind`: reference/generated/draft), генерации и шаги ревью, видео и видео-джобы, стилевые пресеты, кэш моделей провайдеров, креды провайдеров, тарифы/подписки/кредитные транзакции.
+- `models.py` — SQLModel-модели: пользователи/инвайты/Telegram-аккаунты, категории/промпты/версии, изображения (`ImageKind`: reference/generated/draft), генерации и шаги ревью, видео и видео-джобы, стилевые пресеты, кэш моделей провайдеров, креды провайдеров, тарифы/подписки/кредитные транзакции, глобальные шаблоны prompt-gen (`AppPromptTemplate`) и их интенты (`PromptGenIntent`).
 - `api/` — REST-роутеры под префиксом `/api`: auth, invites, categories, prompts, styles, images, generations, video-generations, videos, media-ingress, assistant, providers, settings, limits, admin (tariffs, tg-users).
-- `services/` — `jobs.py` (in-process воркеры генераций + reaper), `imaging.py`, `video.py`, `media_links.py` (HMAC-ссылки), `limits.py` (тарифы/квоты/кредиты), `provider_runtime.py`, `telegram_auth.py` (initData HMAC), `catalog.py`.
+- `services/` — `jobs.py` (in-process воркеры генераций + reaper), `imaging.py`, `video.py`, `media_links.py` (HMAC-ссылки), `limits.py` (тарифы/квоты/кредиты), `provider_runtime.py`, `prompt_gen.py` («Придумай промпт»: шаблон + интенты), `telegram_auth.py` (initData HMAC), `catalog.py`.
 - `providers/` — точка расширения под любые ИИ-модели: `base.py` (интерфейсы Chat/Image/VideoProvider), `agnes.py` (первый провайдер: медиа + чат + каталог), `openai_compat.py` (Atlas/CrazyRouter/NordRouter), `registry.py` (lazy-загрузка по id).
 
 ### Frontend (`frontend/src/`) — PoC → админка
 
-- Статус: **proof of concept**; целевое состояние — админка проекта (пользователи, тарифы, провайдеры, контент). Админские страницы уже есть: Users, Tariffs, Models, Settings, Invites.
-- `pages/` — Generate, Media, Video, Prompts, Styles, Models, Settings, Invites, Users, Tariffs, Login/Register.
+- Статус: **proof of concept**; целевое состояние — админка проекта (пользователи, тарифы, провайдеры, контент). Админские страницы уже есть: Users, Tariffs, Models, Settings, Invites, PromptGen.
+- `pages/` — Generate, Media, Video, Prompts, Styles, Models, Settings, PromptGen (шаблон «Придумай промпт»: версии, интенты, плейграунд), Invites, Users, Tariffs, Login/Register.
 - `api/` — клиенты REST (react-query), auth-токен в `auth/`, состояние — zustand, тема — `theme/`.
 - Авторизованная загрузка медиа — `AuthedImage`/`AuthedVideo` (fetch с JWT → blob).
 
@@ -54,6 +54,10 @@
 
 Платная операция → `limits.enforce` → эффективный план (подписка/дефолт) → проверка квоты за период и/или списание кредита (`CreditTransaction`) → исполнение; `GET /api/limits` отдаёт снапшот квот клиенту.
 
+### «Придумай промпт»
+
+Клиент (Mini App / админка) → `POST /api/assistant/suggest` (hint, mode, intent) → `prompt_gen.suggest_prompt`: последняя версия шаблона из `app_prompt_templates` (или код-дефолт) + инструкция интента из `prompt_gen_intents` → chat-провайдер → текст промпта. Админ управляет шаблоном (версии, restore append-only) и интентами (CRUD, сид дефолтов при пустой таблице) через `/api/settings/prompt-template*` и `/api/settings/prompt-gen-intents`; активные интенты для селекторов — `GET /api/assistant/suggest-intents`.
+
 ## Сквозные concerns
 
 - **Файлы vs БД:** метаданные в Postgres, бинарники на `/data` (volume `mm-data`); превью генерируются Pillow при загрузке (отсюда повышенный лимит RAM в local compose).
@@ -71,3 +75,7 @@
 
 - Проект переформулирован: медиа-менеджер для **любых ИИ-моделей**, Agnes — первый этап; инвариант провайдер-агностики зафиксирован в `project.mdc` → «Провайдеры LLM».
 - `frontend/` объявлен proof of concept, целевое состояние — админка проекта; пользовательский клиент — `telegram-app/`.
+
+### 2026-08-03 — prompt-gen: версии и интенты
+
+- «Придумай промпт» получил версионируемый глобальный шаблон (`app_prompt_templates`, restore append-only) и админ-управляемые интенты (`prompt_gen_intents`, сид дефолтов при старте); выбор интента — в админке и Mini App. Инварианты — `project.mdc` → «Придумай промпт (prompt-gen)».

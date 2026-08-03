@@ -16,6 +16,7 @@ import type {
   MediaImage,
   MediaVideo,
   Prompt,
+  PromptGenIntent,
   PromptMode,
   PromptVersion,
   ProviderInfo,
@@ -167,11 +168,12 @@ export const assistantApi = {
       method: 'POST',
       json: { text, category_name, mode },
     }),
-  suggest: (hint: string, mode: PromptMode = 't2i') =>
+  suggest: (hint: string, mode: PromptMode = 't2i', intent?: string | null) =>
     api<{ text: string }>('/api/assistant/suggest', {
       method: 'POST',
-      json: { hint, mode },
+      json: { hint, mode, intent: intent ?? null },
     }),
+  listSuggestIntents: () => api<PromptGenIntent[]>('/api/assistant/suggest-intents'),
   describeImage: (image_id: number) =>
     api<{ text: string }>('/api/assistant/describe-image', {
       method: 'POST',
@@ -271,17 +273,50 @@ export const settingsApi = {
       method: 'PUT',
       json: { text },
     }),
+  restorePromptTemplateVersion: (version: number) =>
+    api<AppPromptTemplate>('/api/settings/prompt-template/restore', {
+      method: 'POST',
+      json: { version },
+    }),
   resetPromptTemplate: () =>
     api<AppPromptTemplate>('/api/settings/prompt-template', { method: 'DELETE' }),
   previewPromptTemplate: (body: {
     text?: string | null
     hint?: string
     mode?: PromptMode
+    intent?: string | null
   }) =>
     api<{ text: string }>('/api/settings/prompt-template/preview', {
       method: 'POST',
       json: body,
     }),
+  listPromptGenIntents: () => api<PromptGenIntent[]>('/api/settings/prompt-gen-intents'),
+  createPromptGenIntent: (body: {
+    key: string
+    label: string
+    instruction: string
+    is_active?: boolean
+    position?: number
+  }) =>
+    api<PromptGenIntent>('/api/settings/prompt-gen-intents', {
+      method: 'POST',
+      json: body,
+    }),
+  updatePromptGenIntent: (
+    id: number,
+    body: {
+      label?: string
+      instruction?: string
+      is_active?: boolean
+      position?: number
+    },
+  ) =>
+    api<PromptGenIntent>(`/api/settings/prompt-gen-intents/${id}`, {
+      method: 'PATCH',
+      json: body,
+    }),
+  deletePromptGenIntent: (id: number) =>
+    api<void>(`/api/settings/prompt-gen-intents/${id}`, { method: 'DELETE' }),
 }
 
 export const tariffsApi = {

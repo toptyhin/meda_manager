@@ -28,6 +28,13 @@ alwaysApply: true
 - При старте `reap_stale_jobs()` / `reap_stale_video_jobs()` помечают зависшие pending/running джобы как `error: interrupted` — джобы не переживают рестарт.
 - **Auto-review пайплайн** (`auto_review: true`): генерация → vision-ревю (`agnes-2.5-flash`, score 0–10) → i2i-правка или регенерация. Лимиты: `AUTO_REVIEW_MAX_FIXES` (дефолт 2), `AUTO_REVIEW_PASS_SCORE` (дефолт 7). При сбое ревью — **fail-open** (картинка принимается как есть). Промежуточные кадры — `ImageKind.draft`, в медиа-гриде не показываются.
 
+### «Придумай промпт» (prompt-gen)
+
+- Кнопка есть в Mini App (`CreatePhotoPage`) и админке (`GeneratePage`); эндпоинт `POST /api/assistant/suggest` (`hint`, `mode`, `intent`) — логика в `app/services/prompt_gen.py`.
+- **Системный шаблон глобальный** (не per-user): версионируется в `app_prompt_templates` (kind=`prompt_gen`), текущий = последняя версия, fallback — `DEFAULT_PROMPT_GEN_TEMPLATE` в коде. Админ-API: `GET/PUT/DELETE /api/settings/prompt-template` + `/restore` (восстановление = старый текст новой версией, история append-only; DELETE удаляет все версии) + `/preview` (плейграунд с черновиком).
+- **Интенты** (настроения: смешной/фантастический/…): таблица `prompt_gen_intents`, админ-CRUD `/api/settings/prompt-gen-intents`; сид дефолтов при старте (только если таблица пуста — правки админа не затираются). Клиенты берут активные через `GET /api/assistant/suggest-intents`; неизвестный/неактивный intent в suggest → 400.
+- Шаблон поддерживает плейсхолдеры `{mode_label}` и `{intent_instruction}`; если `{intent_instruction}` в кастомном шаблоне нет, инструкция интента дописывается блоком в конец (`render_prompt_gen_system`). Инструкции интентов пишутся на английском, label — на русском.
+
 ### Аутентификация и доступ
 
 - Регистрация закрытая, по инвайт-коду; первый пользователь — admin. Bootstrap-инвайт печатается в лог при старте (или `BOOTSTRAP_INVITE`).

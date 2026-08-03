@@ -286,6 +286,25 @@ class AppPromptTemplate(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class PromptGenIntent(SQLModel, table=True):
+    """Admin-managed mood/intent for «Придумай промпт» (funny, romantic, …).
+
+    `label` is shown in clients (RU), `instruction` is injected into the
+    system prompt (EN). Inactive intents are hidden from users and rejected
+    by the suggest endpoint.
+    """
+
+    __tablename__ = "prompt_gen_intents"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    key: str = Field(index=True, unique=True, max_length=64)
+    label: str = Field(max_length=128)
+    instruction: str = Field(sa_column=Column(Text, nullable=False))
+    is_active: bool = Field(default=True)
+    position: int = Field(default=0)
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class StylePreset(SQLModel, table=True):
     __tablename__ = "style_presets"
     __table_args__ = (UniqueConstraint("user_id", "title", name="uq_style_preset_user_title"),)

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { assistantApi, type ImagePromptMode } from '../api/assistant'
@@ -86,6 +86,14 @@ function IconChevron() {
   )
 }
 
+function IconClose() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  )
+}
+
 function Spinner({ className = 'size-4' }: { className?: string }) {
   return (
     <span
@@ -129,16 +137,20 @@ function errMessage(e: unknown, fallback: string): string {
 export function CreatePhotoPage() {
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const promptAreaRef = useRef<HTMLTextAreaElement>(null)
 
   const [step, setStep] = useState<Step>('pick')
   const [mode, setMode] = useState<ImagePromptMode>('t2i')
   const [prompt, setPrompt] = useState('')
+  const [editingPrompt, setEditingPrompt] = useState(false)
   const [ratio, setRatio] = useState<ImageRatio>('1:1')
   const [size, setSize] = useState<ImageSize>('1K')
   const [refImageId, setRefImageId] = useState<number | null>(null)
   const [refPreviewUrl, setRefPreviewUrl] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
+  const [suggestIntent, setSuggestIntent] = useState<string | null>(null)
+  const [intentPickerOpen, setIntentPickerOpen] = useState(false)
   const [improving, setImproving] = useState(false)
   const [jobId, setJobId] = useState<number | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -146,6 +158,10 @@ export function CreatePhotoPage() {
   const [downloading, setDownloading] = useState(false)
 
   const hasPrompt = prompt.trim().length > 0
+  const promptPlaceholder =
+    mode === 'i2i'
+      ? 'Например: сделай вечерний свет, фон — городской закат, сохрани лицо'
+      : 'Например: рыжий кот в скафандре на фоне Марса, кинематографичный свет'
   const canSubmit =
     hasPrompt &&
     !submitting &&
@@ -153,6 +169,12 @@ export function CreatePhotoPage() {
     (mode === 't2i' || refImageId !== null)
 
   const quotaQuery = useQuery({ queryKey: ['limits-me'], queryFn: limitsApi.me })
+  const intentsQuery = useQuery({
+    queryKey: ['suggest-intents'],
+    queryFn: assistantApi.listSuggestIntents,
+    staleTime: 5 * 60_000,
+  })
+  const suggestIntents = intentsQuery.data ?? []
   const imageQuota =
     quotaQuery.data?.enforcement_enabled
       ? quotaQuery.data.resources.find((r) => r.resource_kind === 'image')
@@ -184,16 +206,37 @@ export function CreatePhotoPage() {
     }
   }, [refPreviewUrl])
 
+  useLayoutEffect(() => {
+    if (!editingPrompt) return
+    const el = promptAreaRef.current
+    if (!el) return
+    el.focus({ preventScroll: true })
+    el.setSelectionRange(el.value.length, el.value.length)
+  }, [editingPrompt])
+
+  useLayoutEffect(() => {
+    const el = promptAreaRef.current
+    if (!editingPrompt || !el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }, [editingPrompt, prompt])
+
   function pickMode(next: ImagePromptMode) {
     haptic('medium')
     setMode(next)
     setStep('form')
+    setEditingPrompt(false)
     setFormError(null)
     setJobId(null)
   }
 
   function goBack() {
     haptic()
+    if (intentPickerOpen) {
+      setIntentPickerOpen(false)
+      return
+    }
+    setEditingPrompt(false)
     if (jobId !== null) {
       setJobId(null)
       setFormError(null)
@@ -226,13 +269,24 @@ export function CreatePhotoPage() {
     }
   }
 
-  async function suggest() {
+  function openSuggest() {
     if (suggesting || improving) return
+    haptic()
+    if (suggestIntents.length === 0) {
+      void runSuggest(null)
+      return
+    }
+    setIntentPickerOpen(true)
+  }
+
+  async function runSuggest(intent: string | null) {
+    if (suggesting || improving) return
+    setSuggestIntent(intent)
+    setIntentPickerOpen(false)
     setSuggesting(true)
     setFormError(null)
-    haptic()
     try {
-      const { text } = await assistantApi.suggest(prompt.trim(), mode)
+      const { text } = await assistantApi.suggest(prompt.trim(), mode, intent)
       setPrompt(text)
       hapticNotify('success')
     } catch (e) {
@@ -465,25 +519,60 @@ export function CreatePhotoPage() {
             </div>
           )}
 
-          <label className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-1.5">
             <span className="text-sm font-semibold">Описание</span>
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={4}
-              placeholder={
-                mode === 'i2i'
-                  ? 'Например: сделай вечерний свет, фон — городской закат, сохрани лицо'
-                  : 'Например: рыжий кот в скафандре на фоне Марса, кинематографичный свет'
-              }
-              className="w-full resize-none rounded-2xl border border-line bg-card px-3.5 py-3 text-sm leading-relaxed placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent/50"
-            />
-          </label>
+            {editingPrompt ? (
+              <textarea
+                ref={promptAreaRef}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                onBlur={() => setEditingPrompt(false)}
+                rows={4}
+                placeholder={promptPlaceholder}
+                className="w-full resize-none overflow-hidden rounded-2xl border border-line bg-card px-3.5 py-3 text-sm leading-relaxed placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  haptic()
+                  setEditingPrompt(true)
+                }}
+                className="w-full min-h-[7.25rem] rounded-2xl border border-line bg-card px-3.5 py-3 text-left text-sm leading-relaxed"
+              >
+                <span
+                  className={`block whitespace-pre-wrap ${hasPrompt ? '' : 'text-muted/60'}`}
+                >
+                  {hasPrompt ? prompt : promptPlaceholder}
+                </span>
+              </button>
+            )}
+          </div>
+
+          {suggestIntents.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-sm font-semibold">Настроение</span>
+              <div className="flex flex-wrap gap-1.5">
+                <Chip active={suggestIntent === null} onClick={() => setSuggestIntent(null)}>
+                  Любое
+                </Chip>
+                {suggestIntents.map((i) => (
+                  <Chip
+                    key={i.key}
+                    active={suggestIntent === i.key}
+                    onClick={() => setSuggestIntent(i.key)}
+                  >
+                    {i.label}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => void suggest()}
+              onClick={openSuggest}
               disabled={suggesting || improving}
               className="flex items-center justify-center gap-1.5 rounded-xl border border-line bg-card px-3 py-2.5 text-sm font-semibold active:scale-[0.98] transition disabled:opacity-50"
             >
@@ -541,6 +630,84 @@ export function CreatePhotoPage() {
             {submitting ? <Spinner /> : <IconSparkles />}
             {submitting ? 'Запускаем…' : 'Сгенерировать'}
           </button>
+        </div>
+      )}
+
+      {intentPickerOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-backdrop/45 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-16 anim-fade-up"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="intent-picker-title"
+          onClick={() => setIntentPickerOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-line bg-card p-3.5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3 px-0.5">
+              <div>
+                <h2 id="intent-picker-title" className="text-base font-semibold">
+                  Какое настроение?
+                </h2>
+                <p className="mt-0.5 text-xs text-muted leading-snug">
+                  Выберите, что учесть при генерации промпта
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  haptic()
+                  setIntentPickerOpen(false)
+                }}
+                aria-label="Закрыть"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-muted active:scale-95"
+              >
+                <IconClose />
+              </button>
+            </div>
+            <div className="flex max-h-[min(60vh,24rem)] flex-col gap-1.5 overflow-y-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  haptic()
+                  void runSuggest(null)
+                }}
+                disabled={suggesting}
+                className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-left text-sm font-semibold active:scale-[0.99] transition disabled:opacity-50 ${
+                  suggestIntent === null
+                    ? 'border-accent bg-accent-soft text-accent'
+                    : 'border-line bg-paper'
+                }`}
+              >
+                Любое
+                <span className={suggestIntent === null ? 'text-accent/60' : 'text-muted/50'}>
+                  <IconChevron />
+                </span>
+              </button>
+              {suggestIntents.map((i) => (
+                <button
+                  key={i.key}
+                  type="button"
+                  onClick={() => {
+                    haptic()
+                    void runSuggest(i.key)
+                  }}
+                  disabled={suggesting}
+                  className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-left text-sm font-semibold active:scale-[0.99] transition disabled:opacity-50 ${
+                    suggestIntent === i.key
+                      ? 'border-accent bg-accent-soft text-accent'
+                      : 'border-line bg-paper'
+                  }`}
+                >
+                  {i.label}
+                  <span className={suggestIntent === i.key ? 'text-accent/60' : 'text-muted/50'}>
+                    <IconChevron />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 

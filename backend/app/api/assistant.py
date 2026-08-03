@@ -20,6 +20,7 @@ from app.schemas import (
     ImproveTemplateOut,
     ImproveTemplateVersionCreate,
     ImproveTemplateVersionOut,
+    PromptGenIntentOut,
     SuggestPromptRequest,
     SuggestPromptResponse,
     VisionPromptRequest,
@@ -175,6 +176,17 @@ async def improve_prompt(
     return ImproveResponse(improved_text=improved)
 
 
+@router.get("/suggest-intents", response_model=list[PromptGenIntentOut])
+async def list_suggest_intents(
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> list[PromptGenIntentOut]:
+    """Active «Придумай промпт» intents for the mood picker (admin + Mini App)."""
+    _ = user
+    intents = await prompt_gen.list_active_intents(session)
+    return [PromptGenIntentOut.model_validate(i) for i in intents]
+
+
 @router.post("/suggest", response_model=SuggestPromptResponse)
 async def suggest_prompt(
     body: SuggestPromptRequest,
@@ -184,8 +196,10 @@ async def suggest_prompt(
     """«Придумай промпт»: invent a brand-new image prompt via the chat provider."""
     try:
         text = await prompt_gen.suggest_prompt(
-            session, user, hint=body.hint.strip(), mode=body.mode
+            session, user, hint=body.hint.strip(), mode=body.mode, intent_key=body.intent
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except GenerationError as exc:
         raise HTTPException(status_code=exc.status_code or 502, detail=exc.message) from exc
     return SuggestPromptResponse(text=text)
