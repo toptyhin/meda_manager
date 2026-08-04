@@ -624,3 +624,24 @@ class TgUserDetail(TgUserListItem):
 
 class TgUserUpdate(BaseModel):
     is_blocked: bool
+
+
+# --- Sales plan scenarios (admin calculator) ---
+
+
+class SalesPlanScenarioIn(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    payload: dict = Field(default_factory=dict)
+
+
+class SalesPlanScenarioUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    payload: Optional[dict] = None
+
+
+class SalesPlanScenarioOut(BaseModel):
+    id: int
+    name: str
+    payload: dict
+    created_at: datetime
+    updated_at: datetime

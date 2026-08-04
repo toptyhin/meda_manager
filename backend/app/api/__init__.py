@@ -12,6 +12,7 @@ from app.api import (
     media_ingress,
     prompts,
     providers,
+    sales_plan,
     settings,
     styles,
     videos,
@@ -38,3 +39,6 @@ api_router.include_router(settings.router, prefix="/settings", tags=["settings"]
 api_router.include_router(limits.router, prefix="/limits", tags=["limits"])
 api_router.include_router(admin.tariffs_router, prefix="/admin/tariffs", tags=["admin-tariffs"])
 api_router.include_router(admin.tg_users_router, prefix="/admin/tg-users", tags=["admin-tg-users"])
+api_router.include_router(
+    sales_plan.router, prefix="/sales-scenarios", tags=["sales-plan"]
+)

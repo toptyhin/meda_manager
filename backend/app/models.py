@@ -354,6 +354,21 @@ class UserChatPreference(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class SalesPlanScenario(SQLModel, table=True):
+    """Named admin scenario for sales-funnel unit economics (free tier,
+    referral %, conversions). `payload` is a JSON blob owned by the frontend
+    calculator; the API stores/returns it as-is."""
+
+    __tablename__ = "sales_plan_scenarios"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True, max_length=128)
+    payload: str = Field(sa_column=Column(Text, nullable=False))
+    updated_by: Optional[int] = Field(default=None, foreign_key="users.id")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class TariffPlan(SQLModel, table=True):
     """Named bundle of periodic quotas; assigned to Telegram accounts."""
 

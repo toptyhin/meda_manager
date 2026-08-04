@@ -11,6 +11,7 @@ import { PromptsPage } from './pages/PromptsPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { StylesPage } from './pages/StylesPage'
+import { SalesPlanPage } from './pages/SalesPlanPage'
 import { TariffsPage } from './pages/TariffsPage'
 import { UsersPage } from './pages/UsersPage'
 import { VideoPage } from './pages/VideoPage'
@@ -51,6 +52,7 @@ export default function App() {
         <Route path="prompt-gen" element={<PromptGenPage />} />
         <Route path="invites" element={<InvitesPage />} />
         <Route path="tariffs" element={<TariffsPage />} />
+        <Route path="sales-plan" element={<SalesPlanPage />} />
         <Route path="users" element={<UsersPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

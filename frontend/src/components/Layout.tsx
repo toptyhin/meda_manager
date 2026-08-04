@@ -167,6 +167,13 @@ export function Layout() {
           >
             Инвайты
           </NavLink>
+          <NavLink
+            to="/sales-plan"
+            className={sideLinkClass}
+            onClick={() => setMenuOpen(false)}
+          >
+            Экономика продаж
+          </NavLink>
           {user?.is_admin && (
             <>
               <NavLink

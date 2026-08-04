@@ -386,3 +386,16 @@ export type TgUserDetail = TgUserListItem & {
   transactions: CreditTransaction[]
   quota: QuotaSnapshot | null
 }
+
+export type SalesPlanScenario = {
+  id: number
+  name: string
+  payload: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export type SalesPlanScenarioPayload = {
+  name: string
+  payload: Record<string, unknown>
+}

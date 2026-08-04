@@ -25,6 +25,8 @@ import type {
   StyleKind,
   StylePreset,
   Subscription,
+  SalesPlanScenario,
+  SalesPlanScenarioPayload,
   TariffPlan,
   TariffPlanPayload,
   TgUserDetail,
@@ -325,6 +327,19 @@ export const tariffsApi = {
   update: (id: number, body: TariffPlanPayload & { clear_description?: boolean }) =>
     api<TariffPlan>(`/api/admin/tariffs/${id}`, { method: 'PATCH', json: body }),
   remove: (id: number) => api<void>(`/api/admin/tariffs/${id}`, { method: 'DELETE' }),
+}
+
+export const salesPlanApi = {
+  list: () => api<SalesPlanScenario[]>('/api/sales-scenarios'),
+  create: (body: SalesPlanScenarioPayload) =>
+    api<SalesPlanScenario>('/api/sales-scenarios', { method: 'POST', json: body }),
+  update: (id: number, body: Partial<SalesPlanScenarioPayload>) =>
+    api<SalesPlanScenario>(`/api/sales-scenarios/${id}`, {
+      method: 'PATCH',
+      json: body,
+    }),
+  remove: (id: number) =>
+    api<void>(`/api/sales-scenarios/${id}`, { method: 'DELETE' }),
 }
 
 export const adminUsersApi = {

@@ -11,15 +11,16 @@
 - `main.py` — FastAPI app, lifespan (init_db → reap stale jobs → bootstrap invite → сид prompt-gen интентов), SPA-раздача из `frontend/dist`, `/api/health`.
 - `config.py` — `Settings` (pydantic-settings, `.env` в корне репо); валидатор Postgres-only.
 - `db.py` — async engine + session factory; `init_db()` = `create_all` + создание каталогов данных.
-- `models.py` — SQLModel-модели: пользователи/инвайты/Telegram-аккаунты, категории/промпты/версии, изображения (`ImageKind`: reference/generated/draft), генерации и шаги ревью, видео и видео-джобы, стилевые пресеты, кэш моделей провайдеров, креды провайдеров, тарифы/подписки/кредитные транзакции, глобальные шаблоны prompt-gen (`AppPromptTemplate`) и их интенты (`PromptGenIntent`).
-- `api/` — REST-роутеры под префиксом `/api`: auth, invites, categories, prompts, styles, images, generations, video-generations, videos, media-ingress, assistant, providers, settings, limits, admin (tariffs, tg-users).
+- `models.py` — SQLModel-модели: пользователи/инвайты/Telegram-аккаунты, категории/промпты/версии, изображения (`ImageKind`: reference/generated/draft), генерации и шаги ревью, видео и видео-джобы, стилевые пресеты, кэш моделей провайдеров, креды провайдеров, тарифы/подписки/кредитные транзакции, глобальные шаблоны prompt-gen (`AppPromptTemplate`) и их интенты (`PromptGenIntent`), сценарии экономики продаж (`SalesPlanScenario`).
+- `api/` — REST-роутеры под префиксом `/api`: auth, invites, categories, prompts, styles, images, generations, video-generations, videos, media-ingress, assistant, providers, settings, limits, sales-scenarios, admin (tariffs, tg-users).
 - `services/` — `jobs.py` (in-process воркеры генераций + reaper), `imaging.py`, `video.py`, `media_links.py` (HMAC-ссылки), `limits.py` (тарифы/квоты/кредиты), `provider_runtime.py`, `prompt_gen.py` («Придумай промпт»: шаблон + интенты), `telegram_auth.py` (initData HMAC), `catalog.py`.
 - `providers/` — точка расширения под любые ИИ-модели: `base.py` (интерфейсы Chat/Image/VideoProvider), `agnes.py` (первый провайдер: медиа + чат + каталог), `openai_compat.py` (Atlas/CrazyRouter/NordRouter), `registry.py` (lazy-загрузка по id).
 
 ### Frontend (`frontend/src/`) — PoC → админка
 
-- Статус: **proof of concept**; целевое состояние — админка проекта (пользователи, тарифы, провайдеры, контент). Админские страницы уже есть: Users, Tariffs, Models, Settings, Invites, PromptGen.
-- `pages/` — Generate, Media, Video, Prompts, Styles, Models, Settings, PromptGen (шаблон «Придумай промпт»: версии, интенты, плейграунд), Invites, Users, Tariffs, Login/Register.
+- Статус: **proof of concept**; целевое состояние — админка проекта (пользователи, тарифы, провайдеры, контент). Админские страницы: Users, Tariffs, Models, Settings, Invites, PromptGen. SalesPlan (`/sales-plan`) — для всех авторизованных.
+- `pages/` — Generate, Media, Video, Prompts, Styles, Models, Settings, PromptGen (шаблон «Придумай промпт»: версии, интенты, плейграунд), Invites, Users, Tariffs, SalesPlan (калькулятор воронки), Login/Register.
+- `lib/salesPlan.ts` — дефолтный справочник цен моделей и чистая функция `computeSalesPlan` (unit-экономика на клиенте).
 - `api/` — клиенты REST (react-query), auth-токен в `auth/`, состояние — zustand, тема — `theme/`.
 - Авторизованная загрузка медиа — `AuthedImage`/`AuthedVideo` (fetch с JWT → blob).
 
@@ -58,6 +59,10 @@
 
 Клиент (Mini App / админка) → `POST /api/assistant/suggest` (hint, mode, intent) → `prompt_gen.suggest_prompt`: последняя версия шаблона из `app_prompt_templates` (или код-дефолт) + инструкция интента из `prompt_gen_intents` → chat-провайдер → текст промпта. Админ управляет шаблоном (версии, restore append-only) и интентами (CRUD, сид дефолтов при пустой таблице) через `/api/settings/prompt-template*` и `/api/settings/prompt-gen-intents`; активные интенты для селекторов — `GET /api/assistant/suggest-intents`.
 
+### Экономика продаж (sales-plan)
+
+Страница `/sales-plan` (любой авторизованный пользователь) держит именованные сценарии в `sales_plan_scenarios` через CRUD `/api/sales-scenarios` (payload = JSON blob). Пересчёт unit-экономики на клиенте (`lib/salesPlan.ts`): микс тарифов (доли → ARPPU, COGS от max-модели тарифа), free-tier модели (COGS = max среди выбранных), реферальный %, воронка/маржа/break-even + SVG-графики. Backend не участвует в формулах. Не связан с runtime `limits.enforce`.
+
 ## Сквозные concerns
 
 - **Файлы vs БД:** метаданные в Postgres, бинарники на `/data` (volume `mm-data`); превью генерируются Pillow при загрузке (отсюда повышенный лимит RAM в local compose).
@@ -79,3 +84,7 @@
 ### 2026-08-03 — prompt-gen: версии и интенты
 
 - «Придумай промпт» получил версионируемый глобальный шаблон (`app_prompt_templates`, restore append-only) и админ-управляемые интенты (`prompt_gen_intents`, сид дефолтов при старте); выбор интента — в админке и Mini App. Инварианты — `project.mdc` → «Придумай промпт (prompt-gen)».
+
+### 2026-08-04 — экономика продаж
+
+- Страница `/sales-plan` для всех авторизованных: CRUD сценариев (`SalesPlanScenario` / `/api/sales-scenarios`), клиентский калькулятор воронки (free tier, реферальный %, конверсии, справочник цен моделей). Инварианты — `project.mdc` → «Экономика продаж (sales-plan)».
