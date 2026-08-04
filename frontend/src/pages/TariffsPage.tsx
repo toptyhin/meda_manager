@@ -85,9 +85,13 @@ function LimitRows({
   return (
     <div className="space-y-2">
       {limits.map((row, idx) => (
-        <div key={idx} className="flex flex-wrap items-center gap-2 text-sm">
+        <div
+          key={`${row.resource_kind}/${row.period}`}
+          className="flex flex-wrap items-center gap-2 text-sm"
+        >
           <select
             value={row.resource_kind}
+            aria-label="Тип ресурса"
             onChange={(e) =>
               onChange(
                 limits.map((r, i) =>
@@ -102,6 +106,7 @@ function LimitRows({
           </select>
           <select
             value={row.period}
+            aria-label="Период лимита"
             onChange={(e) =>
               onChange(
                 limits.map((r, i) =>
@@ -116,27 +121,35 @@ function LimitRows({
             <option value="monthly">в месяц</option>
             <option value="total">всего</option>
           </select>
-          <input
-            type="number"
-            min={0}
-            placeholder="безлимит"
-            value={row.max_count ?? ''}
-            onChange={(e) =>
-              onChange(
-                limits.map((r, i) =>
-                  i === idx
-                    ? { ...r, max_count: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) }
-                    : r,
-                ),
-              )
-            }
-            className={`${inputCls} w-24`}
-            title="Максимум генераций за период; пусто — безлимит"
-          />
+          <label className="inline-flex items-center gap-1.5">
+            <span className="sr-only">Максимум за период (пусто — безлимит)</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="безлимит"
+              value={row.max_count ?? ''}
+              onChange={(e) =>
+                onChange(
+                  limits.map((r, i) =>
+                    i === idx
+                      ? {
+                          ...r,
+                          max_count:
+                            e.target.value === '' ? null : Math.max(0, Number(e.target.value)),
+                        }
+                      : r,
+                  ),
+                )
+              }
+              className={`${inputCls} w-24`}
+              title="Максимум генераций за период; пусто — безлимит"
+            />
+          </label>
           <span className="text-muted text-xs">кредитов за генерацию сверх квоты:</span>
           <input
             type="number"
             min={1}
+            aria-label="Кредитов сверх квоты"
             value={row.credit_cost}
             onChange={(e) =>
               onChange(

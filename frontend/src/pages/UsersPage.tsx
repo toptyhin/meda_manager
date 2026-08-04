@@ -94,6 +94,7 @@ function UserDetailPanel({
   onAction: () => void
   onError: (e: Error) => void
 }) {
+  const qc = useQueryClient()
   const detail = useQuery({
     queryKey: ['admin-tg-user', user.telegram_id],
     queryFn: () => adminUsersApi.get(user.telegram_id),
@@ -116,6 +117,8 @@ function UserDetailPanel({
     onSuccess: () => {
       setPlanId('')
       setExpiresAt('')
+      void qc.invalidateQueries({ queryKey: ['admin-tg-users'] })
+      void qc.invalidateQueries({ queryKey: ['admin-tg-user'] })
       onAction()
     },
     onError,
@@ -126,6 +129,8 @@ function UserDetailPanel({
       adminUsersApi.grantCredits(user.telegram_id, Number(amount), creditKind, reason.trim()),
     onSuccess: () => {
       setReason('')
+      void qc.invalidateQueries({ queryKey: ['admin-tg-users'] })
+      void qc.invalidateQueries({ queryKey: ['admin-tg-user'] })
       onAction()
     },
     onError,
@@ -150,6 +155,7 @@ function UserDetailPanel({
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={planId}
+            aria-label="Тариф"
             onChange={(e) => setPlanId(e.target.value ? Number(e.target.value) : '')}
             className={inputCls}
           >
@@ -186,12 +192,14 @@ function UserDetailPanel({
           <input
             type="number"
             value={amount}
+            aria-label="Сумма кредитов"
             onChange={(e) => setAmount(e.target.value)}
             className={`${inputCls} w-24`}
             title="Положительное — начисление, отрицательное — списание"
           />
           <select
             value={creditKind}
+            aria-label="Тип кредита"
             onChange={(e) => setCreditKind(e.target.value as Exclude<CreditKind, 'consume'>)}
             className={inputCls}
           >
@@ -201,13 +209,16 @@ function UserDetailPanel({
               </option>
             ))}
           </select>
-          <input
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Комментарий"
-            className={`${inputCls} flex-1 min-w-40`}
-          />
+          <label className="flex-1 min-w-40 block">
+            <span className="sr-only">Комментарий</span>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Комментарий"
+              className={`${inputCls} w-full`}
+            />
+          </label>
           <button
             type="button"
             disabled={!Number(amount) || grant.isPending}
@@ -314,13 +325,16 @@ export function UsersPage() {
             Тарифы, кредиты и блокировки пользователей Mini App
           </p>
         </div>
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Поиск: имя, @username или id…"
-          className={`${inputCls} w-72`}
-        />
+        <label className="block w-72">
+          <span className="sr-only">Поиск пользователей</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Поиск: имя, @username или id…"
+            className={`${inputCls} w-full`}
+          />
+        </label>
       </div>
 
       {error && <div className="rounded-lg bg-bad/10 text-bad text-sm px-4 py-3">{error}</div>}

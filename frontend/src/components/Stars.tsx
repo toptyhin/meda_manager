@@ -14,6 +14,7 @@ export function Stars({ value, onChange, size = 'md' }: Props) {
           type="button"
           role="radio"
           aria-checked={value === n}
+          aria-label={`${n} из 5`}
           disabled={!onChange}
           className={`leading-none ${
             n <= value ? 'text-accent' : 'text-line'

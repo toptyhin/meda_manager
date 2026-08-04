@@ -1,5 +1,9 @@
 import { Link } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useCurrentUser } from '../api/auth'
+import { imagesApi } from '../api/images'
+import { videosApi } from '../api/videos'
+import { AuthedImage } from '../components/AuthedImage'
 import { haptic, telegramGreetingName, useTelegramUser } from '../twa/telegram'
 
 function IconSparkles() {
@@ -84,11 +88,51 @@ const quickActions = [
   },
 ]
 
+function IconPlaySmall() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M8 5.5v13l11-6.5-11-6.5z" />
+    </svg>
+  )
+}
+
 export function HomePage() {
   const user = useTelegramUser()
   // Dev-вход без Telegram: приветствуем по логину веб-аккаунта
   const me = useCurrentUser(user === null)
   const name = telegramGreetingName(user, me.data?.username ?? 'друг')
+
+  const imagesQuery = useQuery({
+    queryKey: ['images', 'recent'],
+    queryFn: () =>
+      imagesApi.list({
+        kind: 'generated',
+        page_size: 8,
+        sort: 'created_at',
+        order: 'desc',
+      }),
+  })
+  const videosQuery = useQuery({
+    queryKey: ['videos', 'recent'],
+    queryFn: () => videosApi.list({ page_size: 4 }),
+  })
+
+  const recent = [
+    ...(imagesQuery.data?.items ?? []).map((img) => ({
+      type: 'image' as const,
+      id: img.id,
+      created_at: img.created_at,
+      thumb_url: img.thumb_url,
+    })),
+    ...(videosQuery.data?.items ?? []).map((vid) => ({
+      type: 'video' as const,
+      id: vid.id,
+      created_at: vid.created_at,
+      duration: vid.duration,
+    })),
+  ]
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    .slice(0, 6)
 
   return (
     <div className="flex flex-col gap-5">
@@ -166,7 +210,7 @@ export function HomePage() {
               className="group flex flex-col gap-2 rounded-2xl border border-line bg-card p-3.5 active:scale-[0.98] transition-transform"
             >
               <span className="flex items-center justify-between">
-                <span className="inline-flex items-center justify-center size-10 rounded-xl bg-accent-soft text-accent">
+                <span className="inline-flex items-center justify-center size-10 rounded-xl bg-gradient-to-br from-grad-from via-grad-via to-grad-to text-white shadow-md">
                   {a.icon}
                 </span>
                 <span className="text-muted/60 group-active:text-accent transition-colors">
@@ -189,21 +233,48 @@ export function HomePage() {
           <h3 className="text-sm font-semibold text-muted uppercase tracking-wider">
             Недавнее
           </h3>
-          <Link to="/media" className="text-xs font-medium text-accent">
+          <Link to="/media" onClick={() => haptic()} className="text-xs font-medium text-accent">
             Все файлы
           </Link>
         </div>
-        <div className="rounded-2xl border-2 border-dashed border-line bg-card/60 px-5 py-8 text-center">
-          <div className="mx-auto mb-3 inline-flex size-11 items-center justify-center rounded-full bg-accent-soft text-accent">
-            <IconGrid />
+        {recent.length === 0 ? (
+          <div className="rounded-2xl border-2 border-dashed border-line bg-card/60 px-5 py-8 text-center">
+            <div className="mx-auto mb-3 inline-flex size-11 items-center justify-center rounded-full bg-accent-soft text-accent">
+              <IconGrid />
+            </div>
+            <p className="text-sm font-medium">Пока пусто</p>
+            <p className="mt-1 text-xs text-muted leading-relaxed">
+              Здесь появятся ваши последние генерации.
+              <br />
+              Начните с кнопки «Создать» ниже.
+            </p>
           </div>
-          <p className="text-sm font-medium">Пока пусто</p>
-          <p className="mt-1 text-xs text-muted leading-relaxed">
-            Здесь появятся ваши последние генерации.
-            <br />
-            Начните с кнопки «Создать» ниже.
-          </p>
-        </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {recent.map((item) => (
+              <Link
+                key={`${item.type}-${item.id}`}
+                to="/media"
+                onClick={() => haptic()}
+                className="relative aspect-square overflow-hidden rounded-xl border border-line bg-card"
+              >
+                {item.type === 'image' ? (
+                  <AuthedImage
+                    src={item.thumb_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-accent-soft text-accent">
+                    <span className="inline-flex size-8 items-center justify-center rounded-full bg-accent text-white">
+                      <IconPlaySmall />
+                    </span>
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )

@@ -330,6 +330,7 @@ function IntentsSection({ onError }: { onError: (msg: string | null) => void }) 
   )
 }
 
+// react-doctor-disable-next-line react-doctor/no-giant-component -- admin page with template editor + intents + preview
 export function PromptGenPage() {
   const { user, loading } = useAuth()
   const qc = useQueryClient()
@@ -403,6 +404,8 @@ export function PromptGenPage() {
     onError: (e: Error) => setError(errorText(e)),
   })
 
+  // Preview-only: writes local state, no query cache to invalidate.
+  // react-doctor-disable-next-line react-doctor/query-mutation-missing-invalidation
   const runUserSuggest = useMutation({
     mutationFn: () => assistantApi.suggest(hint.trim(), mode, intent),
     onSuccess: (data) => {

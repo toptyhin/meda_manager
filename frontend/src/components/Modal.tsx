@@ -13,8 +13,11 @@ export function Modal({ onClose, label, className = '', children }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const closingRef = useRef(false)
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   const requestClose = useCallback(() => {
     const el = ref.current
@@ -79,7 +82,7 @@ export function Modal({ onClose, label, className = '', children }: Props) {
     <dialog
       ref={ref}
       aria-label={label}
-      className={`m-auto w-full max-h-[90vh] overflow-auto rounded-2xl border border-line bg-card text-ink shadow-xl p-0 opacity-0 open:opacity-100 starting:open:opacity-0 transition-all transition-discrete duration-200 ease-out backdrop:bg-backdrop/70 backdrop:opacity-0 open:backdrop:opacity-100 starting:open:backdrop:opacity-0 backdrop:transition-opacity backdrop:transition-discrete backdrop:duration-200 ${className}`}
+      className={`m-auto w-full max-h-[90vh] overflow-auto rounded-2xl border border-line bg-card text-ink shadow-xl p-0 opacity-0 open:opacity-100 starting:open:opacity-0 transition-opacity transition-discrete duration-200 ease-out backdrop:bg-backdrop/70 backdrop:opacity-0 open:backdrop:opacity-100 starting:open:backdrop:opacity-0 backdrop:transition-opacity backdrop:transition-discrete backdrop:duration-200 ${className}`}
     >
       {content}
     </dialog>

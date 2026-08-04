@@ -132,7 +132,7 @@ export function Layout() {
       <dialog
         ref={menuRef}
         aria-label="Меню"
-        className="fixed right-0 top-0 left-auto bottom-auto m-0 h-full max-h-none w-72 max-w-[85vw] border-0 border-l border-line bg-card text-ink shadow-xl p-0 translate-x-full open:translate-x-0 starting:open:translate-x-full transition-all transition-discrete duration-300 ease-out backdrop:bg-backdrop/40 backdrop:opacity-0 open:backdrop:opacity-100 starting:open:backdrop:opacity-0 backdrop:transition-all backdrop:transition-discrete backdrop:duration-300"
+        className="fixed right-0 top-0 left-auto bottom-auto m-0 h-full max-h-none w-72 max-w-[85vw] border-0 border-l border-line bg-card text-ink shadow-xl p-0 translate-x-full open:translate-x-0 starting:open:translate-x-full transition-transform transition-discrete duration-300 ease-out backdrop:bg-backdrop/40 backdrop:opacity-0 open:backdrop:opacity-100 starting:open:backdrop:opacity-0 backdrop:transition-opacity backdrop:transition-discrete backdrop:duration-300"
       >
         <div className="flex items-center justify-between gap-2 px-4 h-14 border-b border-line">
           <span className="font-semibold text-sm">Меню</span>

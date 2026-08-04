@@ -38,23 +38,29 @@ export function DevLoginPage({ error, onSubmit }: Props) {
         </p>
 
         <form onSubmit={(e) => void handleSubmit(e)} className="mt-6 w-full flex flex-col gap-3">
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Логин"
-            autoComplete="username"
-            autoCapitalize="none"
-            className="w-full rounded-xl border border-line bg-card px-3.5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Пароль"
-            autoComplete="current-password"
-            className="w-full rounded-xl border border-line bg-card px-3.5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
+          <label className="block text-left">
+            <span className="mb-1 block text-xs font-medium text-muted">Логин</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="username"
+              autoComplete="username"
+              autoCapitalize="none"
+              className="w-full rounded-xl border border-line bg-card px-3.5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+            />
+          </label>
+          <label className="block text-left">
+            <span className="mb-1 block text-xs font-medium text-muted">Пароль</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              className="w-full rounded-xl border border-line bg-card px-3.5 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+            />
+          </label>
 
           {error && (
             <p className="rounded-xl border border-bad/30 bg-bad/10 text-bad px-3.5 py-2.5 text-sm leading-snug">

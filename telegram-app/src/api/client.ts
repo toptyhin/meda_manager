@@ -7,6 +7,7 @@ export function getToken(): string | null {
 }
 
 export function setToken(token: string | null) {
+  // react-doctor-disable-next-line react-doctor/auth-token-in-web-storage -- TMA JWT; HttpOnly cookies need same-site API deploy
   if (token) localStorage.setItem(TOKEN_KEY, token)
   else localStorage.removeItem(TOKEN_KEY)
 }

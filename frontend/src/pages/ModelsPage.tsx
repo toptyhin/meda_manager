@@ -31,6 +31,12 @@ const KIND_OPTIONS = [
   { id: 'all', label: 'Все' },
 ] as const
 
+function providerLabel(p: ProviderInfo) {
+  const bits = [p.name]
+  if (!p.configured) bits.push('нет ключа')
+  return bits.join(' · ')
+}
+
 export function ModelsPage() {
   const qc = useQueryClient()
   const [providerId, setProviderId] = useState<string | null>(null)
@@ -98,12 +104,6 @@ export function ModelsPage() {
     ? `${preference.data.provider}::${preference.data.model}`
     : null
 
-  function providerLabel(p: ProviderInfo) {
-    const bits = [p.name]
-    if (!p.configured) bits.push('нет ключа')
-    return bits.join(' · ')
-  }
-
   return (
     <div className="max-w-5xl mx-auto space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -170,12 +170,15 @@ export function ModelsPage() {
             {k.label}
           </button>
         ))}
-        <input
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Фильтр по id…"
-          className="ml-auto min-w-[12rem] flex-1 max-w-xs rounded-lg border border-line bg-card px-3 py-1.5 text-sm"
-        />
+        <label className="ml-auto min-w-[12rem] flex-1 max-w-xs block">
+          <span className="sr-only">Фильтр по id модели</span>
+          <input
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Фильтр по id…"
+            className="w-full rounded-lg border border-line bg-card px-3 py-1.5 text-sm"
+          />
+        </label>
       </div>
 
       {providers.isLoading || models.isLoading ? (

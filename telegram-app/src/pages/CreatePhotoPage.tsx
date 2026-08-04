@@ -94,6 +94,103 @@ function IconClose() {
   )
 }
 
+function IconUpgrade() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 16h14v3a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-3z" />
+      <path d="m5 16 2.2-7.2a1 1 0 0 1 1.7-.4L12 11l3.1-2.6a1 1 0 0 1 1.7.4L19 16" />
+      <path d="M9 19h6" />
+    </svg>
+  )
+}
+
+function IconMoodFunny() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 10h.01M16 10h.01" />
+      <path d="M8.5 14.5c1.2 1.4 2.6 2 3.5 2s2.3-.6 3.5-2" />
+    </svg>
+  )
+}
+
+function IconMoodNoir() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 3a9 9 0 0 0 0 18" fill="currentColor" stroke="none" opacity="0.35" />
+      <path d="M8 10h.01M15 10h.01" />
+      <path d="M9 15h6" />
+    </svg>
+  )
+}
+
+function IconMoodFantastic() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M5 5l1.8 1.8M17.2 17.2 19 19M19 5l-1.8 1.8M6.8 17.2 5 19" />
+    </svg>
+  )
+}
+
+function IconMoodRomantic() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.6-7 10-7 10z" />
+    </svg>
+  )
+}
+
+function IconMoodErotic() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 21c-4.5-3.2-7.5-6.4-7.5-10.2A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 7.5 3.8C19.5 14.6 16.5 17.8 12 21z" />
+      <path d="M12 7V4.5" />
+    </svg>
+  )
+}
+
+function IconMoodDark() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M15.5 3.5A8.5 8.5 0 1 0 20.5 14 6.5 6.5 0 0 1 15.5 3.5z" />
+    </svg>
+  )
+}
+
+function IconMoodEpic() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="m4 16 4-9 4 6 3-4 5 7" />
+      <path d="M3 19h18" />
+    </svg>
+  )
+}
+
+const PREMIUM_INTENT_KEYS = new Set(['erotic', 'noir', 'epic'])
+
+function IntentMoodIcon({ intentKey }: { intentKey: string }) {
+  switch (intentKey) {
+    case 'funny':
+      return <IconMoodFunny />
+    case 'noir':
+      return <IconMoodNoir />
+    case 'fantastic':
+      return <IconMoodFantastic />
+    case 'romantic':
+      return <IconMoodRomantic />
+    case 'erotic':
+      return <IconMoodErotic />
+    case 'dark':
+      return <IconMoodDark />
+    case 'epic':
+      return <IconMoodEpic />
+    default:
+      return <IconSparkles />
+  }
+}
+
 function Spinner({ className = 'size-4' }: { className?: string }) {
   return (
     <span
@@ -134,10 +231,12 @@ function errMessage(e: unknown, fallback: string): string {
   return e instanceof ApiError ? e.detail : fallback
 }
 
+// react-doctor-disable-next-line react-doctor/no-giant-component, react-doctor/prefer-useReducer -- multi-step create flow; split planned separately
 export function CreatePhotoPage() {
   const qc = useQueryClient()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const promptAreaRef = useRef<HTMLTextAreaElement>(null)
+  const intentDialogRef = useRef<HTMLDialogElement>(null)
 
   const [step, setStep] = useState<Step>('pick')
   const [mode, setMode] = useState<ImagePromptMode>('t2i')
@@ -156,6 +255,7 @@ export function CreatePhotoPage() {
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [downloading, setDownloading] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const hasPrompt = prompt.trim().length > 0
   const promptPlaceholder =
@@ -191,10 +291,13 @@ export function CreatePhotoPage() {
   })
   const job = jobQuery.data ?? null
 
+  // Job status arrives via polling, not an event handler.
+  // react-doctor-disable-next-line react-doctor/no-event-handler
   useEffect(() => {
     if (job?.status === 'done') {
       hapticNotify('success')
       void qc.invalidateQueries({ queryKey: ['limits-me'] })
+      void qc.invalidateQueries({ queryKey: ['images'] })
     } else if (job?.status === 'error') {
       hapticNotify('error')
     }
@@ -205,6 +308,26 @@ export function CreatePhotoPage() {
       if (refPreviewUrl) URL.revokeObjectURL(refPreviewUrl)
     }
   }, [refPreviewUrl])
+
+  useEffect(() => {
+    const el = intentDialogRef.current
+    if (!el) return
+    if (intentPickerOpen && !el.open) el.showModal()
+    else if (!intentPickerOpen && el.open) el.close()
+    function onCancel(e: Event) {
+      e.preventDefault()
+      setIntentPickerOpen(false)
+    }
+    function onClick(e: MouseEvent) {
+      if (e.target === el) setIntentPickerOpen(false)
+    }
+    el.addEventListener('cancel', onCancel)
+    el.addEventListener('click', onClick)
+    return () => {
+      el.removeEventListener('cancel', onCancel)
+      el.removeEventListener('click', onClick)
+    }
+  }, [intentPickerOpen])
 
   useLayoutEffect(() => {
     if (!editingPrompt) return
@@ -253,8 +376,13 @@ export function CreatePhotoPage() {
     if (!file) return
     setUploading(true)
     setFormError(null)
-    if (refPreviewUrl) URL.revokeObjectURL(refPreviewUrl)
-    setRefPreviewUrl(URL.createObjectURL(file))
+    // Preview URL is revoked in the refPreviewUrl effect cleanup (and when replaced).
+    // react-doctor-disable-next-line react-doctor/no-create-object-url-without-revoke
+    const previewUrl = URL.createObjectURL(file)
+    setRefPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return previewUrl
+    })
     try {
       const img = await imagesApi.upload(file)
       setRefImageId(img.id)
@@ -427,7 +555,7 @@ export function CreatePhotoPage() {
             onClick={() => pickMode('i2i')}
             className="group flex items-center gap-3.5 rounded-2xl border border-line bg-card p-4 text-left active:scale-[0.98] transition-transform"
           >
-            <span className="inline-flex shrink-0 items-center justify-center size-12 rounded-xl bg-accent-soft text-accent">
+            <span className="inline-flex shrink-0 items-center justify-center size-12 rounded-xl bg-gradient-to-br from-grad-from via-grad-via to-grad-to text-white shadow-md">
               <IconPhoto />
             </span>
             <span className="flex-1 min-w-0">
@@ -453,6 +581,7 @@ export function CreatePhotoPage() {
                 type="file"
                 accept="image/*"
                 className="sr-only"
+                aria-label="Загрузить фото"
                 onChange={(e) => void onPickFile(e.target.files?.[0])}
               />
               {refPreviewUrl || refImageId !== null ? (
@@ -549,7 +678,8 @@ export function CreatePhotoPage() {
             )}
           </div>
 
-          {suggestIntents.length > 0 && (
+          {/* Временно скрыто — чипы настроения пока не используем */}
+          {false && suggestIntents.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-semibold">Настроение</span>
               <div className="flex flex-wrap gap-1.5">
@@ -590,29 +720,58 @@ export function CreatePhotoPage() {
             </button>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold">Соотношение сторон</span>
-            <div className="grid grid-cols-4 gap-1.5">
-              {IMAGE_RATIOS.map((r) => (
-                <Chip key={r} active={ratio === r} onClick={() => setRatio(r)}>
-                  {r}
-                </Chip>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-semibold">Качество</span>
-            <div className="grid grid-cols-4 gap-1.5">
-              {IMAGE_SIZES.map((s) => (
-                <Chip key={s} active={size === s} onClick={() => setSize(s)}>
-                  <span className="block">{s}</span>
-                  <span className="block text-[10px] font-normal opacity-70 mt-0.5">
-                    {SIZE_CAPTIONS[s]}
-                  </span>
-                </Chip>
-              ))}
-            </div>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                haptic()
+                setSettingsOpen((v) => !v)
+              }}
+              aria-expanded={settingsOpen}
+              className="flex w-full items-center gap-2 rounded-xl border border-line bg-card px-3 py-2.5 text-left active:scale-[0.99] transition-transform"
+            >
+              <span className="flex flex-1 flex-wrap items-center gap-1.5 min-w-0">
+                <span className="rounded-xl border border-accent bg-accent-soft text-accent px-2.5 py-1 text-sm font-medium tabular-nums">
+                  {ratio}
+                </span>
+                <span className="rounded-xl border border-accent bg-accent-soft text-accent px-2.5 py-1 text-sm font-medium tabular-nums">
+                  {size}
+                  <span className="font-normal opacity-70"> · {SIZE_CAPTIONS[size]}</span>
+                </span>
+              </span>
+              <span
+                className={`shrink-0 text-muted/60 transition-transform ${settingsOpen ? 'rotate-90' : ''}`}
+              >
+                <IconChevron />
+              </span>
+            </button>
+            {settingsOpen && (
+              <div className="flex flex-col gap-3 rounded-2xl border border-line bg-card p-3">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold">Соотношение сторон</span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {IMAGE_RATIOS.map((r) => (
+                      <Chip key={r} active={ratio === r} onClick={() => setRatio(r)}>
+                        {r}
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-sm font-semibold">Качество</span>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {IMAGE_SIZES.map((s) => (
+                      <Chip key={s} active={size === s} onClick={() => setSize(s)}>
+                        <span className="block">{s}</span>
+                        <span className="block text-[10px] font-normal opacity-70 mt-0.5">
+                          {SIZE_CAPTIONS[s]}
+                        </span>
+                      </Chip>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {formError && (
@@ -633,83 +792,78 @@ export function CreatePhotoPage() {
         </div>
       )}
 
-      {intentPickerOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-backdrop/45 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-16 anim-fade-up"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="intent-picker-title"
-          onClick={() => setIntentPickerOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl border border-line bg-card p-3.5 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-start justify-between gap-3 px-0.5">
-              <div>
-                <h2 id="intent-picker-title" className="text-base font-semibold">
-                  Какое настроение?
-                </h2>
-                <p className="mt-0.5 text-xs text-muted leading-snug">
-                  Выберите, что учесть при генерации промпта
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  haptic()
-                  setIntentPickerOpen(false)
-                }}
-                aria-label="Закрыть"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-muted active:scale-95"
-              >
-                <IconClose />
-              </button>
+      <dialog
+        ref={intentDialogRef}
+        aria-labelledby="intent-picker-title"
+        className="fixed inset-0 z-50 m-0 h-full max-h-none w-full max-w-none border-0 bg-transparent p-0 open:flex open:items-stretch open:justify-center open:bg-backdrop/45"
+      >
+        <div className="flex h-full w-full flex-col bg-card p-3.5 pt-[max(0.875rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-xl">
+          <div className="mb-3 flex shrink-0 items-start justify-between gap-3 px-0.5">
+            <div>
+              <h2 id="intent-picker-title" className="text-base font-semibold">
+                Какое настроение?
+              </h2>
+              <p className="mt-0.5 text-xs text-muted leading-snug">
+                Выберите, что учесть при генерации промпта
+              </p>
             </div>
-            <div className="flex max-h-[min(60vh,24rem)] flex-col gap-1.5 overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => {
-                  haptic()
-                  void runSuggest(null)
-                }}
-                disabled={suggesting}
-                className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-left text-sm font-semibold active:scale-[0.99] transition disabled:opacity-50 ${
-                  suggestIntent === null
-                    ? 'border-accent bg-accent-soft text-accent'
-                    : 'border-line bg-paper'
-                }`}
-              >
-                Любое
-                <span className={suggestIntent === null ? 'text-accent/60' : 'text-muted/50'}>
-                  <IconChevron />
-                </span>
-              </button>
-              {suggestIntents.map((i) => (
-                <button
-                  key={i.key}
-                  type="button"
-                  onClick={() => {
-                    haptic()
-                    void runSuggest(i.key)
-                  }}
-                  disabled={suggesting}
-                  className={`flex items-center justify-between gap-2 rounded-xl border px-3.5 py-3 text-left text-sm font-semibold active:scale-[0.99] transition disabled:opacity-50 ${
-                    suggestIntent === i.key
-                      ? 'border-accent bg-accent-soft text-accent'
-                      : 'border-line bg-paper'
-                  }`}
-                >
-                  {i.label}
-                  <span className={suggestIntent === i.key ? 'text-accent/60' : 'text-muted/50'}>
-                    <IconChevron />
-                  </span>
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                haptic()
+                setIntentPickerOpen(false)
+              }}
+              aria-label="Закрыть"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-muted active:scale-95"
+            >
+              <IconClose />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto">
+            {suggestIntents
+              .toSorted(
+                (a, b) =>
+                  Number(PREMIUM_INTENT_KEYS.has(a.key)) - Number(PREMIUM_INTENT_KEYS.has(b.key)),
+              )
+              .map((i) => {
+                const locked = PREMIUM_INTENT_KEYS.has(i.key)
+                const active = !locked && suggestIntent === i.key
+                return (
+                  <button
+                    key={i.key}
+                    type="button"
+                    onClick={() => {
+                      haptic()
+                      if (locked) return
+                      void runSuggest(i.key)
+                    }}
+                    disabled={suggesting}
+                    aria-disabled={locked || undefined}
+                    className={`flex items-center gap-3 rounded-xl border px-3.5 py-3 text-left text-sm font-semibold transition disabled:opacity-50 ${
+                      locked
+                        ? 'border-line bg-paper text-muted opacity-60'
+                        : active
+                          ? 'border-accent bg-accent-soft text-accent active:scale-[0.99]'
+                          : 'border-line bg-paper active:scale-[0.99]'
+                    }`}
+                  >
+                    <span className={`shrink-0 ${active ? 'text-accent' : 'text-muted'}`}>
+                      <IntentMoodIcon intentKey={i.key} />
+                    </span>
+                    <span className="flex-1 min-w-0">{i.label}</span>
+                    <span
+                      className={
+                        locked ? 'text-accent' : active ? 'text-accent/60' : 'text-muted/50'
+                      }
+                    >
+                      {locked ? <IconUpgrade /> : <IconChevron />}
+                    </span>
+                  </button>
+                )
+              })}
           </div>
         </div>
-      )}
+      </dialog>
 
       {step === 'form' && jobId !== null && (
         <div className="rounded-2xl border border-line bg-card p-3.5">
@@ -750,6 +904,13 @@ export function CreatePhotoPage() {
                   Ещё одно
                 </button>
               </div>
+              <Link
+                to="/media"
+                onClick={() => haptic()}
+                className="mt-2 flex w-full items-center justify-center rounded-xl border border-line px-3 py-2 text-sm font-medium text-accent"
+              >
+                Открыть в медиатеке
+              </Link>
             </>
           ) : job && job.status === 'error' ? (
             <>

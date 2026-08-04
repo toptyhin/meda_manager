@@ -22,7 +22,6 @@ import type {
   ProviderInfo,
   ProviderModelsResponse,
   ProviderSettings,
-  QuotaSnapshot,
   StyleKind,
   StylePreset,
   Subscription,
@@ -353,8 +352,4 @@ export const adminUsersApi = {
       method: 'POST',
       json: { amount, kind, reason: reason || null },
     }),
-}
-
-export const limitsApi = {
-  me: () => api<QuotaSnapshot>('/api/limits/me'),
 }
