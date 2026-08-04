@@ -52,6 +52,17 @@ alwaysApply: true
 - Backend — CRUD именованных JSON-сценариев: `GET/POST/PATCH/DELETE /api/sales-scenarios` (`app/api/sales_plan.py`), доступ `get_current_user`. Структура `payload` принадлежит фронту; API не валидирует бизнес-поля и **не считает** результат.
 - Расчёт — чисто клиентский (`frontend/src/lib/salesPlan.ts::computeSalesPlan`): воронка посетители→регистрация→активация→оплата; несколько платных тарифов с долями продаж (нормализуются) → ARPPU = Σ(доля×цена); COGS тарифа от выбранной максимальной модели + квоты использования; free tier — набор доступных моделей, COGS = max среди выбранных (worst-case); реферальные выплаты = `% от выручки × доля платящих по рефералке`. Курс USD→RUB и справочник цен (дефолты из ODS) — в payload сценария.
 - Это инструмент планирования, не runtime-биллинг: не путать с `limits.enforce` / кредитными транзакциями и не строить на нём enforcement квот.
+- Плановый «реферальный %» в sales-plan **не связан** с runtime-учётом рефералов (ниже): это разные подсистемы.
+
+### Рефералы (runtime, Telegram)
+
+- Учёт реферальной сети по `TelegramAccount.telegram_id` (не веб-`User`). Поля: `referred_by_telegram_id`, `referred_at`. Веб-инвайты (`Invite`) — отдельный механизм закрытой регистрации SPA, не рефералка.
+- Канал атрибуции: deep link `TELEGRAM_APP_URL?startapp=ref_<telegram_id>` (формат `ref_<digits>`). `start_param` извлекается из подписанного initData в `validate_init_data`; клиент Mini App менять не нужно.
+- Связь пишется **один раз** при создании `TelegramAccount` в `POST /api/auth/telegram` (`services/referrals.attach_referrer`). Релогин не перезаписывает. Self-referral и несуществующий реферер — no-op. Циклы структурно невозможны (реферер обязан существовать раньше).
+- Статистика до **трёх уровней** (L1/L2/L3) через вложенные запросы по `referred_by_telegram_id` (`services/referrals.get_referral_stats`). Списки на уровень капаются (последние 50).
+- API: `GET /api/referrals/me` (JWT + TG-привязка; иначе 404) — код/ссылка/счётчики/списки; админ-деталь `GET /api/admin/tg-users/{id}` содержит блок `referral` (`referred_by` + counts).
+- **Без выплат**: никаких начислений в `CreditTransaction`, `limits.enforce` не трогаем. Только учёт и UI (Mini App Profile + админка Users).
+- Существующие БД: ручной SQL `ALTER TABLE telegram_accounts ADD COLUMN referred_by_telegram_id BIGINT REFERENCES telegram_accounts(telegram_id), ADD COLUMN referred_at TIMESTAMP WITHOUT TIME ZONE;` + индекс на `referred_by_telegram_id`.
 
 ### Frontend — PoC, цель: админка
 

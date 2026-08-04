@@ -12,6 +12,7 @@ from app.api import (
     media_ingress,
     prompts,
     providers,
+    referrals,
     sales_plan,
     settings,
     styles,
@@ -37,6 +38,7 @@ api_router.include_router(assistant.router, prefix="/assistant", tags=["assistan
 api_router.include_router(providers.router, prefix="/providers", tags=["providers"])
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(limits.router, prefix="/limits", tags=["limits"])
+api_router.include_router(referrals.router, prefix="/referrals", tags=["referrals"])
 api_router.include_router(admin.tariffs_router, prefix="/admin/tariffs", tags=["admin-tariffs"])
 api_router.include_router(admin.tg_users_router, prefix="/admin/tg-users", tags=["admin-tg-users"])
 api_router.include_router(

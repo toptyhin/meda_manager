@@ -26,6 +26,7 @@ from app.models import (
     utcnow,
 )
 from app.schemas import LoginRequest, RegisterRequest, TelegramAuthRequest, TokenResponse, UserOut
+from app.services.referrals import attach_referrer, parse_referral_start_param
 from app.services.telegram_auth import InitDataError, validate_init_data
 
 router = APIRouter()
@@ -206,7 +207,8 @@ async def login_telegram(
     if account is not None and account.is_blocked:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is blocked")
 
-    if account is None:
+    is_new = account is None
+    if is_new:
         account = TelegramAccount(telegram_id=identity.telegram_id)
     account.username = identity.username
     account.first_name = identity.first_name
@@ -231,6 +233,12 @@ async def login_telegram(
         await session.flush()
         account.linked_user_id = user.id
         await _seed_default_content(session, user)
+
+    # Referral attribution: only on first account creation, never rewritten.
+    if is_new:
+        referrer_id = parse_referral_start_param(identity.start_param)
+        if referrer_id is not None:
+            await attach_referrer(session, account, referrer_id)
 
     session.add(account)
     await session.commit()

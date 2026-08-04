@@ -29,6 +29,7 @@ class TelegramIdentity:
     language_code: str | None = None
     is_premium: bool = False
     auth_date: int = 0
+    start_param: str | None = None
     raw: dict = field(default_factory=dict)
 
 
@@ -65,6 +66,10 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = 86400) -> 
     if not isinstance(user, dict) or not isinstance(user.get("id"), int):
         raise InitDataError("initData user has no id")
 
+    start_param = data.get("start_param") or None
+    if start_param is not None:
+        start_param = str(start_param)
+
     return TelegramIdentity(
         telegram_id=user["id"],
         first_name=str(user.get("first_name") or ""),
@@ -74,5 +79,6 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = 86400) -> 
         language_code=user.get("language_code") or None,
         is_premium=bool(user.get("is_premium", False)),
         auth_date=auth_date,
+        start_param=start_param,
         raw=user,
     )

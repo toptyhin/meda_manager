@@ -11,14 +11,14 @@
 - `main.py` — FastAPI app, lifespan (init_db → reap stale jobs → bootstrap invite → сид prompt-gen интентов), SPA-раздача из `frontend/dist`, `/api/health`.
 - `config.py` — `Settings` (pydantic-settings, `.env` в корне репо); валидатор Postgres-only.
 - `db.py` — async engine + session factory; `init_db()` = `create_all` + создание каталогов данных.
-- `models.py` — SQLModel-модели: пользователи/инвайты/Telegram-аккаунты, категории/промпты/версии, изображения (`ImageKind`: reference/generated/draft), генерации и шаги ревью, видео и видео-джобы, стилевые пресеты, кэш моделей провайдеров, креды провайдеров, тарифы/подписки/кредитные транзакции, глобальные шаблоны prompt-gen (`AppPromptTemplate`) и их интенты (`PromptGenIntent`), сценарии экономики продаж (`SalesPlanScenario`).
-- `api/` — REST-роутеры под префиксом `/api`: auth, invites, categories, prompts, styles, images, generations, video-generations, videos, media-ingress, assistant, providers, settings, limits, sales-scenarios, admin (tariffs, tg-users).
-- `services/` — `jobs.py` (in-process воркеры генераций + reaper), `imaging.py`, `video.py`, `media_links.py` (HMAC-ссылки), `limits.py` (тарифы/квоты/кредиты), `provider_runtime.py`, `prompt_gen.py` («Придумай промпт»: шаблон + интенты), `telegram_auth.py` (initData HMAC), `catalog.py`.
+- `models.py` — SQLModel-модели: пользователи/инвайты/Telegram-аккаунты (в т.ч. `referred_by_telegram_id` / `referred_at`), категории/промпты/версии, изображения (`ImageKind`: reference/generated/draft), генерации и шаги ревью, видео и видео-джобы, стилевые пресеты, кэш моделей провайдеров, креды провайдеров, тарифы/подписки/кредитные транзакции, глобальные шаблоны prompt-gen (`AppPromptTemplate`) и их интенты (`PromptGenIntent`), сценарии экономики продаж (`SalesPlanScenario`).
+- `api/` — REST-роутеры под префиксом `/api`: auth, invites, categories, prompts, styles, images, generations, video-generations, videos, media-ingress, assistant, providers, settings, limits, referrals, sales-scenarios, admin (tariffs, tg-users).
+- `services/` — `jobs.py` (in-process воркеры генераций + reaper), `imaging.py`, `video.py`, `media_links.py` (HMAC-ссылки), `limits.py` (тарифы/квоты/кредиты), `referrals.py` (атрибуция + L1/L2/L3), `provider_runtime.py`, `prompt_gen.py` («Придумай промпт»: шаблон + интенты), `telegram_auth.py` (initData HMAC + `start_param`), `catalog.py`.
 - `providers/` — точка расширения под любые ИИ-модели: `base.py` (интерфейсы Chat/Image/VideoProvider), `agnes.py` (первый провайдер: медиа + чат + каталог), `openai_compat.py` (Atlas/CrazyRouter/NordRouter), `registry.py` (lazy-загрузка по id).
 
 ### Frontend (`frontend/src/`) — PoC → админка
 
-- Статус: **proof of concept**; целевое состояние — админка проекта (пользователи, тарифы, провайдеры, контент). Админские страницы: Users, Tariffs, Models, Settings, Invites, PromptGen. SalesPlan (`/sales-plan`) — для всех авторизованных.
+- Статус: **proof of concept**; целевое состояние — админка проекта (пользователи, тарифы, провайдеры, контент). Админские страницы: Users (в т.ч. блок рефералов), Tariffs, Models, Settings, Invites, PromptGen. SalesPlan (`/sales-plan`) — для всех авторизованных.
 - `pages/` — Generate, Media, Video, Prompts, Styles, Models, Settings, PromptGen (шаблон «Придумай промпт»: версии, интенты, плейграунд), Invites, Users, Tariffs, SalesPlan (калькулятор воронки), Login/Register.
 - `lib/salesPlan.ts` — дефолтный справочник цен моделей и чистая функция `computeSalesPlan` (unit-экономика на клиенте).
 - `api/` — клиенты REST (react-query), auth-токен в `auth/`, состояние — zustand, тема — `theme/`.
@@ -26,7 +26,7 @@
 
 ### Telegram Mini App (`telegram-app/src/`)
 
-- Упрощённый клиент: Create / Home / MediaLibrary / Profile; `twa/` — интеграция Telegram WebApp SDK, auth через initData.
+- Упрощённый клиент: Create / Home / MediaLibrary / Profile (секция «Пригласить друзей» — ссылка и L1/L2/L3); `twa/` — интеграция Telegram WebApp SDK, auth через initData.
 - Прод: статика nginx (`telegram-app/nginx.conf`), `/api` проксируется на backend.
 
 ### Инфраструктура
@@ -49,11 +49,15 @@
 ### Аутентификация
 
 - SPA: register (по инвайту) / login → JWT (72ч) → header `Authorization: Bearer`.
-- Mini App: Telegram initData → `POST /api/auth/telegram` → HMAC-проверка по `TELEGRAM_BOT_TOKEN` → JWT; Telegram-аккаунт привязывается к пользователю, лимиты/кредиты считаются по telegram_id.
+- Mini App: Telegram initData → `POST /api/auth/telegram` → HMAC-проверка по `TELEGRAM_BOT_TOKEN` → JWT; Telegram-аккаунт привязывается к пользователю, лимиты/кредиты считаются по telegram_id. При **первом** создании аккаунта из `start_param=ref_<tg_id>` пишется `referred_by_telegram_id` (иммутабельно).
 
 ### Лимиты и тарифы
 
 Платная операция → `limits.enforce` → эффективный план (подписка/дефолт) → проверка квоты за период и/или списание кредита (`CreditTransaction`) → исполнение; `GET /api/limits` отдаёт снапшот квот клиенту.
+
+### Рефералы
+
+Deep link (`TELEGRAM_APP_URL?startapp=ref_<tg_id>`) → initData.`start_param` → при создании `TelegramAccount` `referrals.attach_referrer`. Статистика L1/L2/L3 — `GET /api/referrals/me` (Mini App Profile) и блок `referral` в `GET /api/admin/tg-users/{id}` (админка Users). Без выплат. Не путать с веб-инвайтами и с плановым % в sales-plan.
 
 ### «Придумай промпт»
 
@@ -88,3 +92,7 @@
 ### 2026-08-04 — экономика продаж
 
 - Страница `/sales-plan` для всех авторизованных: CRUD сценариев (`SalesPlanScenario` / `/api/sales-scenarios`), клиентский калькулятор воронки (free tier, реферальный %, конверсии, справочник цен моделей). Инварианты — `project.mdc` → «Экономика продаж (sales-plan)».
+
+### 2026-08-04 — рефералы (3 уровня)
+
+- Runtime-учёт рефералов через Telegram deep links (`start_param=ref_<tg_id>`): поля на `TelegramAccount`, сервис `referrals.py`, `GET /api/referrals/me`, блок в админ-детали tg-user, UI в Mini App Profile и админке Users. Без выплат. Инварианты — `project.mdc` → «Рефералы (runtime, Telegram)».

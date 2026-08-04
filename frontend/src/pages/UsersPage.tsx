@@ -89,10 +89,12 @@ function UserDetailPanel({
   user,
   onAction,
   onError,
+  onOpenUser,
 }: {
   user: TgUserListItem
   onAction: () => void
   onError: (e: Error) => void
+  onOpenUser: (telegramId: number) => void
 }) {
   const qc = useQueryClient()
   const detail = useQuery({
@@ -149,6 +151,50 @@ function UserDetailPanel({
         <h3 className="text-sm font-semibold">Квота сейчас</h3>
         <QuotaBlock quota={d.quota} />
       </section>
+
+      {d.referral && (
+        <section className="space-y-1.5">
+          <h3 className="text-sm font-semibold">Рефералы</h3>
+          <div className="text-sm space-y-1">
+            <div>
+              <span className="text-muted">Приглашён:</span>{' '}
+              {d.referral.referred_by ? (
+                <button
+                  type="button"
+                  className="text-accent hover:underline font-medium"
+                  onClick={() => onOpenUser(d.referral!.referred_by!.telegram_id)}
+                >
+                  {d.referral.referred_by.username
+                    ? `@${d.referral.referred_by.username}`
+                    : d.referral.referred_by.first_name || d.referral.referred_by.telegram_id}
+                  <span className="text-muted text-xs ml-1">
+                    ({d.referral.referred_by.telegram_id})
+                  </span>
+                </button>
+              ) : (
+                <span className="text-muted">никто</span>
+              )}
+              {d.referral.referred_by?.referred_at && (
+                <span className="text-muted text-xs ml-2">
+                  {fmtDate(d.referral.referred_by.referred_at)}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              <span>
+                L1: <span className="font-medium">{d.referral.counts.l1}</span>
+              </span>
+              <span>
+                L2: <span className="font-medium">{d.referral.counts.l2}</span>
+              </span>
+              <span>
+                L3: <span className="font-medium">{d.referral.counts.l3}</span>
+              </span>
+              <span className="text-muted">всего {d.referral.counts.total}</span>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">Назначить тариф</h3>
@@ -420,7 +466,17 @@ export function UsersPage() {
                 {expandedId === u.telegram_id && (
                   <tr className="border-b border-line/60">
                     <td colSpan={8} className="p-0">
-                      <UserDetailPanel user={u} onAction={invalidate} onError={onError} />
+                      <UserDetailPanel
+                        user={u}
+                        onAction={invalidate}
+                        onError={onError}
+                        onOpenUser={(telegramId) => {
+                          setSearch(String(telegramId))
+                          setQ(String(telegramId))
+                          setOffset(0)
+                          setExpandedId(telegramId)
+                        }}
+                      />
                     </td>
                   </tr>
                 )}

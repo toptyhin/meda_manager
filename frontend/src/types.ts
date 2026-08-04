@@ -381,10 +381,30 @@ export type TgUserListResponse = {
   total: number
 }
 
+export type ReferralUserBrief = {
+  telegram_id: number
+  username: string | null
+  first_name: string
+  referred_at: string | null
+}
+
+export type ReferralCounts = {
+  l1: number
+  l2: number
+  l3: number
+  total: number
+}
+
+export type AdminReferralInfo = {
+  referred_by: ReferralUserBrief | null
+  counts: ReferralCounts
+}
+
 export type TgUserDetail = TgUserListItem & {
   subscriptions: Subscription[]
   transactions: CreditTransaction[]
   quota: QuotaSnapshot | null
+  referral?: AdminReferralInfo | null
 }
 
 export type SalesPlanScenario = {

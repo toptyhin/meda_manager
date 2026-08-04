@@ -126,6 +126,17 @@ class TelegramAccount(SQLModel, table=True):
     is_premium: bool = False
     linked_user_id: Optional[int] = Field(default=None, foreign_key="users.id", unique=True)
     is_blocked: bool = False
+    # Referral attribution (set once on first Mini App login via start_param=ref_<tg_id>).
+    referred_by_telegram_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            BigInteger,
+            ForeignKey("telegram_accounts.telegram_id"),
+            index=True,
+            nullable=True,
+        ),
+    )
+    referred_at: Optional[datetime] = None
     first_seen_at: datetime = Field(default_factory=utcnow)
     last_seen_at: datetime = Field(default_factory=utcnow)
 

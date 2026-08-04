@@ -26,9 +26,12 @@ from app.models import (
     utcnow,
 )
 from app.schemas import (
+    AdminReferralInfo,
     CreditIn,
     CreditTransactionOut,
     QuotaPlanOut,
+    ReferralCounts,
+    ReferralUserBrief,
     SubscriptionIn,
     SubscriptionOut,
     TariffLimitOut,
@@ -46,6 +49,7 @@ from app.services.limits import (
     period_window,
     quota_snapshot,
 )
+from app.services.referrals import get_referral_stats
 
 tariffs_router = APIRouter()
 tg_users_router = APIRouter()
@@ -349,11 +353,37 @@ async def get_tg_user(
         if user is not None:
             quota = await quota_snapshot(session, user, now)
 
+    ref_stats = await get_referral_stats(
+        session,
+        telegram_id,
+        include_referred_by=True,
+        include_levels=False,
+    )
+    referral = AdminReferralInfo(
+        referred_by=(
+            ReferralUserBrief(
+                telegram_id=ref_stats.referred_by.telegram_id,
+                username=ref_stats.referred_by.username,
+                first_name=ref_stats.referred_by.first_name,
+                referred_at=ref_stats.referred_by.referred_at,
+            )
+            if ref_stats.referred_by
+            else None
+        ),
+        counts=ReferralCounts(
+            l1=ref_stats.counts.l1,
+            l2=ref_stats.counts.l2,
+            l3=ref_stats.counts.l3,
+            total=ref_stats.counts.total,
+        ),
+    )
+
     return TgUserDetail(
         **base.model_dump(),
         subscriptions=subscriptions,
         transactions=transactions,
         quota=quota,
+        referral=referral,
     )
 
 

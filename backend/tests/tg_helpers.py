@@ -20,12 +20,15 @@ def make_init_data(
     user: dict,
     bot_token: str = BOT_TOKEN,
     auth_date: int | None = None,
+    start_param: str | None = None,
     extra: dict | None = None,
 ) -> str:
     data = {
         "auth_date": str(auth_date if auth_date is not None else int(time.time())),
         "user": json.dumps(user, separators=(",", ":"), ensure_ascii=False),
     }
+    if start_param is not None:
+        data["start_param"] = start_param
     if extra:
         data.update(extra)
     check = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
@@ -46,11 +49,22 @@ def tg_user_payload(telegram_id: int, **overrides) -> dict:
     return payload
 
 
-async def login_tg_user(client: AsyncClient, telegram_id: int, **overrides) -> str:
+async def login_tg_user(
+    client: AsyncClient,
+    telegram_id: int,
+    *,
+    start_param: str | None = None,
+    **overrides,
+) -> str:
     """Login via /api/auth/telegram, return the access token."""
     resp = await client.post(
         "/api/auth/telegram",
-        json={"init_data": make_init_data(tg_user_payload(telegram_id, **overrides))},
+        json={
+            "init_data": make_init_data(
+                tg_user_payload(telegram_id, **overrides),
+                start_param=start_param,
+            )
+        },
     )
     assert resp.status_code == 200, resp.text
     return resp.json()["access_token"]  # type: ignore[no-any-return]

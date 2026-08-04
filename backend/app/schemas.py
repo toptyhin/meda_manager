@@ -616,10 +616,43 @@ class TgUserListResponse(BaseModel):
     total: int
 
 
+class ReferralUserBrief(BaseModel):
+    telegram_id: int
+    username: Optional[str] = None
+    first_name: str = ""
+    referred_at: Optional[datetime] = None
+
+
+class ReferralCounts(BaseModel):
+    l1: int = 0
+    l2: int = 0
+    l3: int = 0
+    total: int = 0
+
+
+class ReferralLevels(BaseModel):
+    l1: list[ReferralUserBrief] = Field(default_factory=list)
+    l2: list[ReferralUserBrief] = Field(default_factory=list)
+    l3: list[ReferralUserBrief] = Field(default_factory=list)
+
+
+class ReferralMeResponse(BaseModel):
+    code: str
+    link: Optional[str] = None
+    counts: ReferralCounts
+    levels: ReferralLevels
+
+
+class AdminReferralInfo(BaseModel):
+    referred_by: Optional[ReferralUserBrief] = None
+    counts: ReferralCounts
+
+
 class TgUserDetail(TgUserListItem):
     subscriptions: list[SubscriptionOut] = Field(default_factory=list)
     transactions: list[CreditTransactionOut] = Field(default_factory=list)
     quota: Optional[QuotaSnapshot] = None
+    referral: Optional[AdminReferralInfo] = None
 
 
 class TgUserUpdate(BaseModel):

@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     # Telegram Mini App auth: bot token validates initData HMAC; empty disables it.
     telegram_bot_token: str = ""
     telegram_init_data_max_age: int = 86400
+    # Base deep-link for referral share URLs: https://t.me/<bot>/<app>
+    # Empty → /api/referrals/me returns link=null (code still works).
+    telegram_app_url: str = ""
     data_dir: Path = ROOT_DIR / "data"
     frontend_dist: Path = ROOT_DIR / "frontend" / "dist"
     # Required: postgresql+asyncpg://...  SQLite is not supported at runtime.
